@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HI-WIFI · Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  .topbar { background: #fff; border-bottom: 1px solid #e8e8e5; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 16px; font-weight: 500; } .logo span { color: #1D9E75; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 20px 16px; }
+  .card { background: #fff; border: 1px solid #e8e8e5; border-radius: 12px; padding: 16px 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric { background: #f5f5f3; border-radius: 8px; padding: 16px; text-align: center; }
+  .metric-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .metric-value { font-size: 32px; font-weight: 500; line-height: 1; }
+  .metric-unit { font-size: 13px; color: #aaa; margin-top: 4px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
+  .badge-ok  { background: #d1fae5; color: #065f46; }
+  .badge-off { background: #fee2e2; color: #991b1b; }
+  .badge-unk { background: #f3f4f6; color: #6b7280; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { font-size: 13px; padding: 5px 14px; border-radius: 6px; border: none; background: transparent; color: #888; cursor: pointer; }
+  .tab.active { background: #f0f0ee; color: #1a1a1a; font-weight: 500; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .sum-label { font-size: 11px; color: #aaa; } .sum-val { font-size: 16px; font-weight: 500; }
+  input[type=text] { width: 100%; padding: 10px 14px; font-size: 15px; border: 1px solid #ddd; border-radius: 8px; outline: none; letter-spacing: 1px; text-transform: uppercase; }
+  input[type=text]:focus { border-color: #1D9E75; }
+  .btn-primary { width: 100%; padding: 11px; font-size: 14px; font-weight: 500; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px; cursor: pointer; }
+  .btn-link { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
+  .gap { margin-top: 12px; } .gap2 { margin-top: 16px; }
+  #error-msg { font-size: 13px; color: #dc2626; text-align: center; margin-top: 10px; display: none; }
+  #last-update { font-size: 12px; color: #aaa; text-align: right; }
+  canvas { display: block; width: 100% !important; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0d8; }
+    .topbar, .card { background: #242424; border-color: #333; }
+    .metric { background: #2a2a2a; }
+    .metric-label, .metric-unit, #last-update, .sum-label { color: #666; }
+    input[type=text] { background: #2a2a2a; border-color: #444; color: #e0e0d8; }
+    .tab.active { background: #333; color: #e0e0d8; }
+    .tab { color: #666; }
+    .btn-primary { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Hi<span>WIFI</span></div>
+  <div id="topbar-right"></div>
+</div>
+
+<!-- PANTALLA LOGIN -->
+<div id="screen-login" class="wrap">
+  <div class="card" style="max-width:320px;margin:40px auto">
+    <p style="font-size:13px;color:#888;margin-bottom:16px">Ingresá el código de tu equipo para ver tus datos.</p>
+    <label style="font-size:12px;color:#aaa;display:block;margin-bottom:6px">Código de equipo</label>
+    <input id="code-input" type="text" placeholder="Ej: HW-2024-042" autocomplete="off">
+    <div id="error-msg">Código no encontrado. Verificá e intentá de nuevo.</div>
+    <div class="gap">
+      <button class="btn-primary" onclick="login()">Ver mis datos</button>
+    </div>
+    <p style="font-size:11px;color:#aaa;text-align:center;margin-top:12px">El código figura en la etiqueta del dispositivo</p>
+  </div>
+</div>
+
+<!-- PANTALLA DASHBOARD -->
+<div id="screen-dash" class="wrap" style="display:none">
+  <div class="gap grid2">
+    <div class="metric">
+      <div class="metric-label">Temperatura</div>
+      <div class="metric-value" id="val-temp">--</div>
+      <div class="metric-unit">°C</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Humedad</div>
+      <div class="metric-value" id="val-hum">--</div>
+      <div class="metric-unit">%</div>
+    </div>
+  </div>
+
+  <div class="gap" id="last-update"></div>
+
+  <div class="gap card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-size:12px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.5px">Histórico</span>
+      <div class="tabs">
+        <button class="tab active" onclick="loadData('24h',this)">24h</button>
+        <button class="tab" onclick="loadData('7d',this)">7 días</button>
+        <button class="tab" onclick="loadData('30d',this)">30 días</button>
+      </div>
+    </div>
+    <canvas id="chart" height="180"></canvas>
+  </div>
+
+  <div class="gap card">
+    <div style="font-size:12px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Resumen del período</div>
+    <div class="summary-grid">
+      <div><div class="sum-label">Temp. mín.</div><div class="sum-val" id="sum-tmin">--</div></div>
+      <div><div class="sum-label">Temp. máx.</div><div class="sum-val" id="sum-tmax">--</div></div>
+      <div><div class="sum-label">Hum. prom.</div><div class="sum-val" id="sum-havg">--</div></div>
+    </div>
+  </div>
+
+  <div class="gap" style="text-align:center">
+    <button class="btn-link" onclick="logout()">Salir · cambiar dispositivo</button>
+  </div>
+</div>
+
+<script>
+let chart = null;
+let currentCode = '';
+
+async function login() {
+  const code = document.getElementById('code-input').value.trim().toUpperCase();
+  if (!code) return;
+  document.getElementById('error-msg').style.display = 'none';
+  await loadData('24h', null, code);
+}
+
+function logout() {
+  currentCode = '';
+  document.getElementById('screen-dash').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'block';
+  document.getElementById('topbar-right').innerHTML = '';
+  document.getElementById('code-input').value = '';
+  if (chart) { chart.destroy(); chart = null; }
+}
+
+async function loadData(rango, btn, code) {
+  const useCode = code || currentCode;
+  if (!useCode) return;
+
+  try {
+    const res = await fetch(`/api/${useCode}?rango=${rango}`);
+    if (!res.ok) {
+      document.getElementById('error-msg').style.display = 'block';
+      return;
+    }
+    const data = await res.json();
+
+    currentCode = useCode;
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-dash').style.display = 'block';
+
+    const badgeClass = data.online ? 'badge-ok' : (data.minutes_ago === null ? 'badge-unk' : 'badge-off');
+    const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
+    document.getElementById('topbar-right').innerHTML =
+      `<span style="font-size:12px;color:#aaa;margin-right:8px;font-family:monospace">${data.device_code}</span>` +
+      `<span class="badge ${badgeClass}">${badgeText}</span>`;
+
+    if (data.current) {
+      document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
+      document.getElementById('val-hum').textContent  = data.current.humidity.toFixed(0);
+    }
+    const ago = data.minutes_ago;
+    document.getElementById('last-update').textContent =
+      ago === null ? '' : ago === 0 ? 'Última lectura: hace menos de 1 min' : `Última lectura: hace ${ago} min`;
+
+    if (data.summary) {
+      document.getElementById('sum-tmin').textContent = data.summary.temp_min + '°';
+      document.getElementById('sum-tmax').textContent = data.summary.temp_max + '°';
+      document.getElementById('sum-havg').textContent = data.summary.hum_avg + '%';
+    }
+
+    if (btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    buildChart(data.readings);
+
+  } catch(e) {
+    document.getElementById('error-msg').style.display = 'block';
+  }
+}
+
+function buildChart(rows) {
+  const labels = rows.map(r => {
+    const d = new Date(r.ts);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  });
+  const temps = rows.map(r => r.t);
+  const hums  = rows.map(r => r.h);
+
+  const dark = matchMedia('(prefers-color-scheme:dark)').matches;
+  const grid = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const txt  = '#888';
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Temp (°C)', data: temps, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.08)', borderWidth: 1.5, pointRadius: 0, tension: 0.4, yAxisID: 'y' },
+        { label: 'Humedad (%)', data: hums, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.08)', borderWidth: 1.5, pointRadius: 0, tension: 0.4, yAxisID: 'y2' }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { font: { size: 11 }, color: txt, boxWidth: 12, padding: 12 } } },
+      scales: {
+        x:  { ticks: { color: txt, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: grid } },
+        y:  { position: 'left',  ticks: { color: '#D85A30', font: { size: 10 } }, grid: { color: grid }, title: { display: true, text: '°C', color: txt, font: { size: 10 } } },
+        y2: { position: 'right', ticks: { color: '#378ADD', font: { size: 10 } }, grid: { display: false }, title: { display: true, text: '%', color: txt, font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+document.getElementById('code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+</script>
+</body>
+</html>
