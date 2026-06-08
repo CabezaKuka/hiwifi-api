@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HI-WIFI · Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  .topbar { background: #fff; border-bottom: 1px solid #e8e8e5; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 16px; font-weight: 500; } .logo span { color: #1D9E75; }
+  .logo small { font-size: 11px; color: #aaa; margin-left: 6px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  .card { background: #fff; border: 1px solid #e8e8e5; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  h2 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; margin-top: 12px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 9px 12px; font-size: 14px;
+    border: 1px solid #ddd; border-radius: 8px; outline: none;
+  }
+  input:focus { border-color: #1D9E75; }
+  .btn { padding: 9px 18px; font-size: 13px; font-weight: 500; border-radius: 8px; border: none; cursor: pointer; }
+  .btn-green  { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .btn-red    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .btn-gray   { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+  .btn-full   { width: 100%; margin-top: 16px; padding: 11px; }
+  .msg { font-size: 13px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+  .msg-ok  { background: #d1fae5; color: #065f46; }
+  .msg-err { background: #fee2e2; color: #991b1b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; color: #aaa; font-weight: 500; padding: 0 8px 10px; text-transform: uppercase; letter-spacing: .4px; }
+  td { padding: 10px 8px; border-top: 1px solid #f0f0ee; vertical-align: middle; }
+  tr:hover td { background: #fafaf8; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; }
+  .badge-on  { background: #d1fae5; color: #065f46; }
+  .badge-off { background: #fee2e2; color: #991b1b; }
+  .code { font-family: monospace; font-size: 12px; background: #f5f5f3; padding: 2px 6px; border-radius: 4px; }
+  #screen-login { max-width: 340px; margin: 60px auto; }
+  #screen-admin { display: none; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 500px) { .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Hi<span>WIFI</span> <small>Admin</small></div>
+  <div id="topbar-right"></div>
+</div>
+
+<!-- LOGIN -->
+<div class="wrap" id="screen-login">
+  <div class="card">
+    <h2>Acceso administrativo</h2>
+    <label>Clave de administrador</label>
+    <input type="password" id="input-key" placeholder="••••••••" autocomplete="off">
+    <div class="msg" id="msg-login"></div>
+    <button class="btn btn-green btn-full" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
+
+<!-- PANEL ADMIN -->
+<div class="wrap" id="screen-admin">
+
+  <!-- Nuevo dispositivo -->
+  <div class="card">
+    <h2>Nuevo dispositivo</h2>
+    <div class="row">
+      <div>
+        <label>Código del equipo (device_code)</label>
+        <input type="text" id="new-code" placeholder="HW-2024-043" autocomplete="off">
+      </div>
+      <div>
+        <label>Token</label>
+        <input type="text" id="new-token" placeholder="HW-2024-043" autocomplete="off">
+      </div>
+    </div>
+    <label>Ubicación (opcional)</label>
+    <input type="text" id="new-location" placeholder="Ej: Silo Norte, Campo San Pedro">
+    <div class="msg" id="msg-create"></div>
+    <button class="btn btn-green btn-full" onclick="crearDispositivo()">Crear dispositivo</button>
+  </div>
+
+  <!-- Lista de dispositivos -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="margin:0">Dispositivos</h2>
+      <button class="btn btn-gray" onclick="cargarDispositivos()">↻ Actualizar</button>
+    </div>
+    <div id="tabla-wrap">
+      <p style="font-size:13px;color:#aaa">Cargando...</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let adminKey = '';
+
+// ── Login ────────────────────────────────────────────────────────
+async function doLogin() {
+  const key = document.getElementById('input-key').value.trim();
+  if (!key) return;
+
+  const res = await fetch('/admin/devices', {
+    headers: { 'x-admin-key': key }
+  });
+
+  if (res.status === 401) {
+    showMsg('msg-login', 'Clave incorrecta.', false);
+    return;
+  }
+
+  adminKey = key;
+  try { sessionStorage.setItem('hiwifi_admin_key', key); } catch(e) {}
+
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-admin').style.display = 'block';
+  document.getElementById('topbar-right').innerHTML =
+    '<button onclick="logout()" style="font-size:12px;color:#888;background:none;border:none;cursor:pointer;text-decoration:underline">Salir</button>';
+
+  renderTabla(await res.json());
+}
+
+function logout() {
+  try { sessionStorage.removeItem('hiwifi_admin_key'); } catch(e) {}
+  adminKey = '';
+  document.getElementById('screen-admin').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'block';
+  document.getElementById('topbar-right').innerHTML = '';
+  document.getElementById('input-key').value = '';
+}
+
+// ── Crear dispositivo ────────────────────────────────────────────
+async function crearDispositivo() {
+  const device_code = document.getElementById('new-code').value.trim().toUpperCase();
+  const token       = document.getElementById('new-token').value.trim();
+  const location    = document.getElementById('new-location').value.trim();
+
+  if (!device_code || !token) {
+    showMsg('msg-create', 'Código y token son obligatorios.', false);
+    return;
+  }
+
+  const res = await fetch('/admin/devices', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+    body:    JSON.stringify({ device_code, token, location })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    showMsg('msg-create', data.error || 'Error al crear.', false);
+    return;
+  }
+
+  showMsg('msg-create', `Dispositivo ${data.device_code} creado correctamente.`, true);
+  document.getElementById('new-code').value     = '';
+  document.getElementById('new-token').value    = '';
+  document.getElementById('new-location').value = '';
+  cargarDispositivos();
+}
+
+// ── Cargar lista ─────────────────────────────────────────────────
+async function cargarDispositivos() {
+  const res = await fetch('/admin/devices', {
+    headers: { 'x-admin-key': adminKey }
+  });
+  if (!res.ok) return;
+  renderTabla(await res.json());
+}
+
+// ── Activar / desactivar ─────────────────────────────────────────
+async function toggleActive(id, currentActive) {
+  const res = await fetch(`/admin/devices/${id}`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+    body:    JSON.stringify({ active: !currentActive })
+  });
+  if (res.ok) cargarDispositivos();
+}
+
+// ── Render tabla ─────────────────────────────────────────────────
+function renderTabla(devices) {
+  if (!devices.length) {
+    document.getElementById('tabla-wrap').innerHTML =
+      '<p style="font-size:13px;color:#aaa">No hay dispositivos todavía.</p>';
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Token</th>
+          <th>Ubicación</th>
+          <th>Última señal</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  for (const d of devices) {
+    const ago      = d.last_seen_at ? minutosDesde(d.last_seen_at) : null;
+    const agoText  = ago === null ? '—' : ago === 0 ? 'hace <1 min' : `hace ${ago} min`;
+    const badge    = d.active
+      ? '<span class="badge badge-on">Activo</span>'
+      : '<span class="badge badge-off">Inactivo</span>';
+    const btnLabel = d.active ? 'Desactivar' : 'Activar';
+    const btnClass = d.active ? 'btn-red' : 'btn-green';
+
+    html += `
+      <tr>
+        <td><span class="code">${d.device_code}</span></td>
+        <td><span class="code">${d.token}</span></td>
+        <td style="color:#888">${d.location || '—'}</td>
+        <td style="color:#888;font-size:12px">${agoText}</td>
+        <td>${badge}</td>
+        <td><button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})">${btnLabel}</button></td>
+      </tr>`;
+  }
+
+  html += '</tbody></table>';
+  document.getElementById('tabla-wrap').innerHTML = html;
+}
+
+function minutosDesde(ts) {
+  return Math.round((Date.now() - new Date(ts)) / 60000);
+}
+
+function showMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent  = text;
+  el.className    = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Al cargar: recuperar sesión ──────────────────────────────────
+document.getElementById('input-key').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+(function() {
+  try {
+    const saved = sessionStorage.getItem('hiwifi_admin_key');
+    if (saved) {
+      document.getElementById('input-key').value = saved;
+      doLogin();
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>
