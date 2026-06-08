@@ -31,19 +31,24 @@
   input[type=text]:focus { border-color: #1D9E75; }
   .btn-primary { width: 100%; padding: 11px; font-size: 14px; font-weight: 500; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px; cursor: pointer; }
   .btn-link { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
+  .btn-csv { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; border: 1px solid #a7f3d0; background: #d1fae5; color: #065f46; cursor: pointer; }
   .gap { margin-top: 12px; } .gap2 { margin-top: 16px; }
   #error-msg { font-size: 13px; color: #dc2626; text-align: center; margin-top: 10px; display: none; }
-  #last-update { font-size: 12px; color: #aaa; text-align: right; }
+  #last-update { font-size: 12px; color: #aaa; }
+  .refresh-row { display: flex; align-items: center; justify-content: space-between; }
+  #countdown { font-size: 11px; color: #bbb; }
   canvas { display: block; width: 100% !important; }
   @media (prefers-color-scheme: dark) {
     body { background: #1a1a1a; color: #e0e0d8; }
     .topbar, .card { background: #242424; border-color: #333; }
     .metric { background: #2a2a2a; }
-    .metric-label, .metric-unit, #last-update, .sum-label, .chart-title { color: #666; }
+    .metric-label, .metric-unit, #last-update, .sum-label, .chart-title, #countdown { color: #666; }
     input[type=text] { background: #2a2a2a; border-color: #444; color: #e0e0d8; }
     .tab.active { background: #333; color: #e0e0d8; }
     .tab { color: #666; }
     .btn-primary { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+    .btn-csv { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+    .badge-unk { background: #333; color: #aaa; }
   }
 </style>
 </head>
@@ -82,16 +87,19 @@
     </div>
   </div>
 
-  <div class="gap" id="last-update"></div>
+  <div class="gap refresh-row">
+    <div id="last-update"></div>
+    <div id="countdown"></div>
+  </div>
 
-  <!-- tabs de rango -->
-  <div class="gap" style="display:flex;align-items:center;justify-content:space-between">
-    <span style="font-size:12px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.5px">Histórico</span>
+  <!-- tabs de rango + descarga -->
+  <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div class="tabs">
-      <button class="tab active" onclick="loadData('24h',this)">24h</button>
-      <button class="tab" onclick="loadData('7d',this)">7 días</button>
-      <button class="tab" onclick="loadData('30d',this)">30 días</button>
+      <button class="tab active" onclick="setRango('24h',this)">24h</button>
+      <button class="tab" onclick="setRango('7d',this)">7 días</button>
+      <button class="tab" onclick="setRango('30d',this)">30 días</button>
     </div>
+    <button class="btn-csv" onclick="descargarCSV()">⬇ Descargar CSV</button>
   </div>
 
   <!-- gráfico temperatura -->
@@ -122,24 +130,44 @@
 </div>
 
 <script>
-let chartTemp = null;
-let chartHum  = null;
-let currentCode = '';
+let chartTemp    = null;
+let chartHum     = null;
+let currentCode  = '';
+let currentRango = '24h';
+let lastReadings = [];
+let refreshTimer = null;
+let countdownInterval = null;
+let secondsLeft  = 300;
 
-const dark = matchMedia('(prefers-color-scheme:dark)').matches;
+const dark      = matchMedia('(prefers-color-scheme:dark)').matches;
 const gridColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 const txtColor  = '#888';
 
+// ── Persistencia del código ──────────────────────────────────────
+function saveCode(code) {
+  try { localStorage.setItem('hiwifi_code', code); } catch(e) {}
+}
+function getSavedCode() {
+  try { return localStorage.getItem('hiwifi_code') || ''; } catch(e) { return ''; }
+}
+function clearCode() {
+  try { localStorage.removeItem('hiwifi_code'); } catch(e) {}
+}
+
+// ── Login ────────────────────────────────────────────────────────
 async function login() {
   const code = document.getElementById('code-input').value.trim().toUpperCase();
   if (!code) return;
   document.getElementById('error-msg').style.display = 'none';
-  await loadData('24h', null, code);
+  await loadData(code, currentRango);
 }
 
 function logout() {
-  currentCode = '';
-  document.getElementById('screen-dash').style.display = 'none';
+  clearCode();
+  currentCode  = '';
+  lastReadings = [];
+  stopRefresh();
+  document.getElementById('screen-dash').style.display  = 'none';
   document.getElementById('screen-login').style.display = 'block';
   document.getElementById('topbar-right').innerHTML = '';
   document.getElementById('code-input').value = '';
@@ -147,18 +175,30 @@ function logout() {
   if (chartHum)  { chartHum.destroy();  chartHum  = null; }
 }
 
-async function loadData(rango, btn, code) {
-  const useCode = code || currentCode;
-  if (!useCode) return;
+// ── Rango ────────────────────────────────────────────────────────
+function setRango(rango, btn) {
+  currentRango = rango;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadData(currentCode, rango);
+}
 
+// ── Carga de datos ───────────────────────────────────────────────
+async function loadData(code, rango) {
+  if (!code) return;
   try {
-    const res = await fetch(`/api/${useCode}?rango=${rango}`);
-    if (!res.ok) { document.getElementById('error-msg').style.display = 'block'; return; }
+    const res = await fetch(`/api/${code}?rango=${rango}`);
+    if (!res.ok) {
+      document.getElementById('error-msg').style.display = 'block';
+      return;
+    }
     const data = await res.json();
 
-    currentCode = useCode;
+    currentCode = code;
+    saveCode(code);
+
     document.getElementById('screen-login').style.display = 'none';
-    document.getElementById('screen-dash').style.display = 'block';
+    document.getElementById('screen-dash').style.display  = 'block';
 
     const badgeClass = data.online ? 'badge-ok' : (data.minutes_ago === null ? 'badge-unk' : 'badge-off');
     const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
@@ -173,7 +213,9 @@ async function loadData(rango, btn, code) {
 
     const ago = data.minutes_ago;
     document.getElementById('last-update').textContent =
-      ago === null ? '' : ago === 0 ? 'Última lectura: hace menos de 1 min' : `Última lectura: hace ${ago} min`;
+      ago === null ? '' : ago === 0
+        ? 'Última lectura: hace menos de 1 min'
+        : `Última lectura: hace ${ago} min`;
 
     if (data.summary) {
       document.getElementById('sum-tmin').textContent = data.summary.temp_min + '°';
@@ -181,40 +223,83 @@ async function loadData(rango, btn, code) {
       document.getElementById('sum-havg').textContent = data.summary.hum_avg + '%';
     }
 
-    if (btn) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-    }
+    lastReadings = data.readings || [];
 
-    const labels = data.readings.map(r => {
+    const labels = lastReadings.map(r => {
       const d = new Date(r.ts);
       return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
     });
-    const temps = data.readings.map(r => r.t);
-    const hums  = data.readings.map(r => r.h);
+    buildChartTemp(labels, lastReadings.map(r => r.t));
+    buildChartHum(labels,  lastReadings.map(r => r.h));
 
-    buildChartTemp(labels, temps);
-    buildChartHum(labels, hums);
+    startRefresh();
 
   } catch(e) {
     document.getElementById('error-msg').style.display = 'block';
   }
 }
 
+// ── Auto-refresh cada 5 minutos ──────────────────────────────────
+function startRefresh() {
+  stopRefresh();
+  secondsLeft = 300;
+  updateCountdown();
+
+  countdownInterval = setInterval(() => {
+    secondsLeft--;
+    updateCountdown();
+  }, 1000);
+
+  refreshTimer = setInterval(() => {
+    loadData(currentCode, currentRango);
+  }, 300000);
+}
+
+function stopRefresh() {
+  if (refreshTimer)      { clearInterval(refreshTimer);      refreshTimer      = null; }
+  if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+  document.getElementById('countdown').textContent = '';
+}
+
+function updateCountdown() {
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  document.getElementById('countdown').textContent =
+    `Actualiza en ${m}:${s.toString().padStart(2,'0')}`;
+}
+
+// ── Descarga CSV ─────────────────────────────────────────────────
+function descargarCSV() {
+  if (!lastReadings.length) return;
+
+  const header = 'Fecha/Hora,Temperatura (°C),Humedad (%)';
+  const rows = lastReadings.map(r => {
+    const d = new Date(r.ts);
+    const fecha = d.toLocaleDateString('es-AR') + ' ' +
+                  d.getHours().toString().padStart(2,'0') + ':' +
+                  d.getMinutes().toString().padStart(2,'0');
+    return `${fecha},${r.t},${r.h}`;
+  });
+
+  const csv     = [header, ...rows].join('\n');
+  const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `hiwifi_${currentCode}_${currentRango}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Gráficos ─────────────────────────────────────────────────────
 function buildChartTemp(labels, temps) {
   if (chartTemp) chartTemp.destroy();
   chartTemp = new Chart(document.getElementById('chart-temp').getContext('2d'), {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        data: temps,
-        borderColor: '#D85A30',
-        backgroundColor: 'rgba(216,90,48,0.08)',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0.4
-      }]
+      datasets: [{ data: temps, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.08)',
+        borderWidth: 1.5, pointRadius: 0, tension: 0.4 }]
     },
     options: {
       responsive: true,
@@ -222,12 +307,9 @@ function buildChartTemp(labels, temps) {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
-        y: {
-          min: -10, max: 70,
-          ticks: { color: '#D85A30', font: { size: 10 }, stepSize: 10,
-            callback: v => v + '°' },
-          grid: { color: gridColor }
-        }
+        y: { min: -10, max: 70,
+          ticks: { color: '#D85A30', font: { size: 10 }, stepSize: 10, callback: v => v + '°' },
+          grid: { color: gridColor } }
       }
     }
   });
@@ -239,14 +321,8 @@ function buildChartHum(labels, hums) {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        data: hums,
-        borderColor: '#378ADD',
-        backgroundColor: 'rgba(55,138,221,0.08)',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0.4
-      }]
+      datasets: [{ data: hums, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.08)',
+        borderWidth: 1.5, pointRadius: 0, tension: 0.4 }]
     },
     options: {
       responsive: true,
@@ -254,20 +330,26 @@ function buildChartHum(labels, hums) {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
-        y: {
-          min: 0, max: 100,
-          ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20,
-            callback: v => v + '%' },
-          grid: { color: gridColor }
-        }
+        y: { min: 0, max: 100,
+          ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20, callback: v => v + '%' },
+          grid: { color: gridColor } }
       }
     }
   });
 }
 
+// ── Enter en el input ────────────────────────────────────────────
 document.getElementById('code-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') login();
 });
+
+// ── Al cargar la página: recuperar código guardado ───────────────
+(function() {
+  const saved = getSavedCode();
+  if (saved) {
+    loadData(saved, currentRango);
+  }
+})();
 </script>
 </body>
 </html>
