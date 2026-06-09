@@ -27,8 +27,8 @@
   .chart-title { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
   .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
   .sum-label { font-size: 11px; color: #aaa; } .sum-val { font-size: 16px; font-weight: 500; }
-  input[type=text] { width: 100%; padding: 10px 14px; font-size: 15px; border: 1px solid #ddd; border-radius: 8px; outline: none; letter-spacing: 1px; text-transform: uppercase; }
-  input[type=text]:focus { border-color: #1D9E75; }
+  input[type=text], input[type=number] { width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid #ddd; border-radius: 8px; outline: none; background: #fff; color: #1a1a1a; }
+  input[type=text]:focus, input[type=number]:focus { border-color: #1D9E75; }
   .btn-primary { width: 100%; padding: 11px; font-size: 14px; font-weight: 500; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px; cursor: pointer; }
   .btn-link { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
   .btn-csv { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; border: 1px solid #a7f3d0; background: #d1fae5; color: #065f46; cursor: pointer; }
@@ -38,17 +38,58 @@
   .refresh-row { display: flex; align-items: center; justify-content: space-between; }
   #countdown { font-size: 11px; color: #bbb; }
   canvas { display: block; width: 100% !important; }
+
+  /* ── ALERTAS ── */
+  .alert-header {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .alert-header-title {
+    font-size: 13px; font-weight: 600; color: #1a1a1a;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .alert-toggle-arrow { font-size: 11px; color: #aaa; transition: transform .2s; }
+  .alert-toggle-arrow.open { transform: rotate(180deg); }
+  .alert-body { display: none; margin-top: 16px; }
+  .alert-body.open { display: block; }
+  .alert-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .alert-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .alert-section-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .5px; margin: 14px 0 8px; }
+  .alert-range-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+  .alert-range-sep { font-size: 12px; color: #aaa; text-align: center; }
+  .btn-save-alert { width: 100%; margin-top: 16px; padding: 10px; font-size: 13px; font-weight: 600; background: #1D9E75; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+  .btn-save-alert:hover { opacity: .88; }
+  .alert-active-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .toggle-switch { position: relative; display: inline-block; width: 38px; height: 22px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: #ddd; border-radius: 22px; transition: .2s;
+  }
+  .toggle-slider:before {
+    position: absolute; content: ''; height: 16px; width: 16px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s;
+  }
+  input:checked + .toggle-slider { background: #1D9E75; }
+  input:checked + .toggle-slider:before { transform: translateX(16px); }
+  .alert-msg { font-size: 12px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+  .alert-msg.ok  { background: #d1fae5; color: #065f46; display: block; }
+  .alert-msg.err { background: #fee2e2; color: #991b1b; display: block; }
+  .alert-info { font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 6px; }
+
   @media (prefers-color-scheme: dark) {
     body { background: #1a1a1a; color: #e0e0d8; }
     .topbar, .card { background: #242424; border-color: #333; }
     .metric { background: #2a2a2a; }
     .metric-label, .metric-unit, #last-update, .sum-label, .chart-title, #countdown { color: #666; }
-    input[type=text] { background: #2a2a2a; border-color: #444; color: #e0e0d8; }
+    input[type=text], input[type=number] { background: #2a2a2a; border-color: #444; color: #e0e0d8; }
     .tab.active { background: #333; color: #e0e0d8; }
     .tab { color: #666; }
     .btn-primary { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
     .btn-csv { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
     .badge-unk { background: #333; color: #aaa; }
+    .alert-header-title { color: #e0e0d8; }
+    .toggle-slider { background: #444; }
   }
 </style>
 </head>
@@ -92,7 +133,6 @@
     <div id="countdown"></div>
   </div>
 
-  <!-- tabs de rango + descarga -->
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div class="tabs">
       <button class="tab active" onclick="setRango('24h',this)">24h</button>
@@ -102,25 +142,92 @@
     <button class="btn-csv" onclick="descargarCSV()">⬇ Descargar CSV</button>
   </div>
 
-  <!-- gráfico temperatura -->
   <div class="gap card">
     <div class="chart-title" style="color:#D85A30">Temperatura (°C)</div>
     <canvas id="chart-temp" height="160"></canvas>
   </div>
 
-  <!-- gráfico humedad -->
   <div class="gap card">
     <div class="chart-title" style="color:#378ADD">Humedad (%)</div>
     <canvas id="chart-hum" height="160"></canvas>
   </div>
 
-  <!-- resumen -->
   <div class="gap card">
     <div style="font-size:12px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Resumen del período</div>
     <div class="summary-grid">
       <div><div class="sum-label">Temp. mín.</div><div class="sum-val" id="sum-tmin">--</div></div>
       <div><div class="sum-label">Temp. máx.</div><div class="sum-val" id="sum-tmax">--</div></div>
       <div><div class="sum-label">Hum. prom.</div><div class="sum-val" id="sum-havg">--</div></div>
+    </div>
+  </div>
+
+  <!-- ── ALERTAS WHATSAPP ── -->
+  <div class="gap card">
+    <div class="alert-header" onclick="toggleAlertPanel()">
+      <div class="alert-header-title">
+        🔔 Alertas por WhatsApp
+        <span id="alert-status-badge"></span>
+      </div>
+      <span class="alert-toggle-arrow" id="alert-arrow">▼</span>
+    </div>
+
+    <div class="alert-body" id="alert-body">
+
+      <div class="alert-active-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="alert-active">
+          <span class="toggle-slider"></span>
+        </label>
+        <span style="font-size:13px">Alertas activas</span>
+      </div>
+
+      <div class="alert-section-title">Contacto</div>
+      <div class="alert-grid2">
+        <div>
+          <div class="alert-label">Número WhatsApp (con código país)</div>
+          <input type="text" id="alert-phone" placeholder="+59171234567">
+        </div>
+        <div>
+          <div class="alert-label">API Key de CallMeBot</div>
+          <input type="text" id="alert-apikey" placeholder="123456">
+        </div>
+      </div>
+      <div class="alert-info">
+        Para obtener tu API Key: agregá <b>+34 644 59 21 58</b> a tus contactos y enviále el mensaje: <b>I allow callmebot to send me messages</b>
+      </div>
+
+      <div class="alert-section-title">Rango de temperatura (°C)</div>
+      <div class="alert-range-row">
+        <div>
+          <div class="alert-label">Mínimo</div>
+          <input type="number" id="alert-temp-min" placeholder="Ej: 15" step="0.5">
+        </div>
+        <div class="alert-range-sep">—</div>
+        <div>
+          <div class="alert-label">Máximo</div>
+          <input type="number" id="alert-temp-max" placeholder="Ej: 35" step="0.5">
+        </div>
+      </div>
+
+      <div class="alert-section-title">Rango de humedad (%)</div>
+      <div class="alert-range-row">
+        <div>
+          <div class="alert-label">Mínimo</div>
+          <input type="number" id="alert-hum-min" placeholder="Ej: 40" step="1">
+        </div>
+        <div class="alert-range-sep">—</div>
+        <div>
+          <div class="alert-label">Máximo</div>
+          <input type="number" id="alert-hum-max" placeholder="Ej: 80" step="1">
+        </div>
+      </div>
+
+      <div class="alert-info" style="margin-top:10px">
+        Recibirás un mensaje si la temperatura o humedad sale del rango configurado. Máximo una alerta por hora por variable.
+      </div>
+
+      <button class="btn-save-alert" onclick="guardarAlertas()">Guardar configuración</button>
+      <div class="alert-msg" id="alert-msg"></div>
     </div>
   </div>
 
@@ -143,18 +250,10 @@ const dark      = matchMedia('(prefers-color-scheme:dark)').matches;
 const gridColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 const txtColor  = '#888';
 
-// ── Persistencia del código ──────────────────────────────────────
-function saveCode(code) {
-  try { localStorage.setItem('hiwifi_code', code); } catch(e) {}
-}
-function getSavedCode() {
-  try { return localStorage.getItem('hiwifi_code') || ''; } catch(e) { return ''; }
-}
-function clearCode() {
-  try { localStorage.removeItem('hiwifi_code'); } catch(e) {}
-}
+function saveCode(code)  { try { localStorage.setItem('hiwifi_code', code); } catch(e) {} }
+function getSavedCode()  { try { return localStorage.getItem('hiwifi_code') || ''; } catch(e) { return ''; } }
+function clearCode()     { try { localStorage.removeItem('hiwifi_code'); } catch(e) {} }
 
-// ── Login ────────────────────────────────────────────────────────
 async function login() {
   const code = document.getElementById('code-input').value.trim().toUpperCase();
   if (!code) return;
@@ -175,7 +274,6 @@ function logout() {
   if (chartHum)  { chartHum.destroy();  chartHum  = null; }
 }
 
-// ── Rango ────────────────────────────────────────────────────────
 function setRango(rango, btn) {
   currentRango = rango;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -183,15 +281,11 @@ function setRango(rango, btn) {
   loadData(currentCode, rango);
 }
 
-// ── Carga de datos ───────────────────────────────────────────────
 async function loadData(code, rango) {
   if (!code) return;
   try {
     const res = await fetch(`/api/${code}?rango=${rango}`);
-    if (!res.ok) {
-      document.getElementById('error-msg').style.display = 'block';
-      return;
-    }
+    if (!res.ok) { document.getElementById('error-msg').style.display = 'block'; return; }
     const data = await res.json();
 
     currentCode = code;
@@ -232,46 +326,99 @@ async function loadData(code, rango) {
     buildChartTemp(labels, lastReadings.map(r => r.t));
     buildChartHum(labels,  lastReadings.map(r => r.h));
 
-    startRefresh();
+    // cargar config de alertas si viene en la respuesta
+    if (data.alert) cargarConfigAlertas(data.alert);
 
+    startRefresh();
   } catch(e) {
     document.getElementById('error-msg').style.display = 'block';
   }
 }
 
-// ── Auto-refresh cada 5 minutos ──────────────────────────────────
+// ── Alertas ──────────────────────────────────────────────────────
+function toggleAlertPanel() {
+  const body  = document.getElementById('alert-body');
+  const arrow = document.getElementById('alert-arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function cargarConfigAlertas(cfg) {
+  document.getElementById('alert-active').checked  = cfg.active !== false;
+  document.getElementById('alert-phone').value     = cfg.phone    || '';
+  document.getElementById('alert-apikey').value    = cfg.apikey   || '';
+  document.getElementById('alert-temp-min').value  = cfg.temp_min != null ? cfg.temp_min : '';
+  document.getElementById('alert-temp-max').value  = cfg.temp_max != null ? cfg.temp_max : '';
+  document.getElementById('alert-hum-min').value   = cfg.hum_min  != null ? cfg.hum_min  : '';
+  document.getElementById('alert-hum-max').value   = cfg.hum_max  != null ? cfg.hum_max  : '';
+
+  // badge en el header
+  const badge = document.getElementById('alert-status-badge');
+  if (cfg.active && cfg.phone && cfg.apikey) {
+    badge.innerHTML = '<span class="badge badge-ok">Activas</span>';
+  } else {
+    badge.innerHTML = '';
+  }
+}
+
+async function guardarAlertas() {
+  const body = {
+    phone:    document.getElementById('alert-phone').value.trim()   || null,
+    apikey:   document.getElementById('alert-apikey').value.trim()  || null,
+    temp_min: parseFloat(document.getElementById('alert-temp-min').value) || null,
+    temp_max: parseFloat(document.getElementById('alert-temp-max').value) || null,
+    hum_min:  parseFloat(document.getElementById('alert-hum-min').value)  || null,
+    hum_max:  parseFloat(document.getElementById('alert-hum-max').value)  || null,
+    active:   document.getElementById('alert-active').checked
+  };
+
+  const msgEl = document.getElementById('alert-msg');
+  msgEl.className = 'alert-msg';
+
+  try {
+    const res = await fetch(`/api/${currentCode}/alertas`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body)
+    });
+    if (res.ok) {
+      msgEl.textContent = 'Configuración guardada correctamente.';
+      msgEl.className   = 'alert-msg ok';
+      cargarConfigAlertas(body);
+    } else {
+      msgEl.textContent = 'Error al guardar. Intentá de nuevo.';
+      msgEl.className   = 'alert-msg err';
+    }
+  } catch(e) {
+    msgEl.textContent = 'Error de conexión.';
+    msgEl.className   = 'alert-msg err';
+  }
+
+  setTimeout(() => { msgEl.className = 'alert-msg'; }, 4000);
+}
+
+// ── Refresh ───────────────────────────────────────────────────────
 function startRefresh() {
   stopRefresh();
   secondsLeft = 300;
   updateCountdown();
-
-  countdownInterval = setInterval(() => {
-    secondsLeft--;
-    updateCountdown();
-  }, 1000);
-
-  refreshTimer = setInterval(() => {
-    loadData(currentCode, currentRango);
-  }, 300000);
+  countdownInterval = setInterval(() => { secondsLeft--; updateCountdown(); }, 1000);
+  refreshTimer = setInterval(() => loadData(currentCode, currentRango), 300000);
 }
-
 function stopRefresh() {
-  if (refreshTimer)      { clearInterval(refreshTimer);      refreshTimer      = null; }
+  if (refreshTimer)      { clearInterval(refreshTimer);      refreshTimer = null; }
   if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
   document.getElementById('countdown').textContent = '';
 }
-
 function updateCountdown() {
   const m = Math.floor(secondsLeft / 60);
   const s = secondsLeft % 60;
-  document.getElementById('countdown').textContent =
-    `Actualiza en ${m}:${s.toString().padStart(2,'0')}`;
+  document.getElementById('countdown').textContent = `Actualiza en ${m}:${s.toString().padStart(2,'0')}`;
 }
 
-// ── Descarga CSV ─────────────────────────────────────────────────
+// ── CSV ───────────────────────────────────────────────────────────
 function descargarCSV() {
   if (!lastReadings.length) return;
-
   const header = 'Fecha/Hora,Temperatura (°C),Humedad (%)';
   const rows = lastReadings.map(r => {
     const d = new Date(r.ts);
@@ -280,36 +427,26 @@ function descargarCSV() {
                   d.getMinutes().toString().padStart(2,'0');
     return `${fecha},${r.t},${r.h}`;
   });
-
-  const csv     = [header, ...rows].join('\n');
-  const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url     = URL.createObjectURL(blob);
-  const a       = document.createElement('a');
-  a.href        = url;
-  a.download    = `hiwifi_${currentCode}_${currentRango}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const blob = new Blob([[header,...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `hiwifi_${currentCode}_${currentRango}.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
-// ── Gráficos ─────────────────────────────────────────────────────
+// ── Gráficos ──────────────────────────────────────────────────────
 function buildChartTemp(labels, temps) {
   if (chartTemp) chartTemp.destroy();
   chartTemp = new Chart(document.getElementById('chart-temp').getContext('2d'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{ data: temps, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.08)',
-        borderWidth: 1.5, pointRadius: 0, tension: 0.4 }]
-    },
+    data: { labels, datasets: [{ data: temps, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.08)', borderWidth: 1.5, pointRadius: 0, tension: 0.4 }] },
     options: {
       responsive: true,
       plugins: { legend: { display: false } },
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
-        y: { min: -10, max: 70,
-          ticks: { color: '#D85A30', font: { size: 10 }, stepSize: 10, callback: v => v + '°' },
-          grid: { color: gridColor } }
+        y: { min: -10, max: 70, ticks: { color: '#D85A30', font: { size: 10 }, stepSize: 10, callback: v => v + '°' }, grid: { color: gridColor } }
       }
     }
   });
@@ -319,36 +456,26 @@ function buildChartHum(labels, hums) {
   if (chartHum) chartHum.destroy();
   chartHum = new Chart(document.getElementById('chart-hum').getContext('2d'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{ data: hums, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.08)',
-        borderWidth: 1.5, pointRadius: 0, tension: 0.4 }]
-    },
+    data: { labels, datasets: [{ data: hums, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.08)', borderWidth: 1.5, pointRadius: 0, tension: 0.4 }] },
     options: {
       responsive: true,
       plugins: { legend: { display: false } },
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
-        y: { min: 0, max: 100,
-          ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20, callback: v => v + '%' },
-          grid: { color: gridColor } }
+        y: { min: 0, max: 100, ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20, callback: v => v + '%' }, grid: { color: gridColor } }
       }
     }
   });
 }
 
-// ── Enter en el input ────────────────────────────────────────────
 document.getElementById('code-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') login();
 });
 
-// ── Al cargar la página: recuperar código guardado ───────────────
 (function() {
   const saved = getSavedCode();
-  if (saved) {
-    loadData(saved, currentRango);
-  }
+  if (saved) loadData(saved, currentRango);
 })();
 </script>
 </body>
