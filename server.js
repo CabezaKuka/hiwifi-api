@@ -187,9 +187,8 @@ app.get('/api/:codigo', async (req, res) => {
 // ─────────────────────────────────────────────
 app.post('/api/:codigo/alertas', async (req, res) => {
   const { codigo } = req.params;
-  const { phone, apikey, temp_min, temp_max, hum_min, hum_max, active } = req.body;
+  const { bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active } = req.body;
 
-  // verificar que el dispositivo existe
   const dev = await pool.query(
     'SELECT id FROM devices WHERE device_code = $1 AND active = TRUE',
     [codigo]
@@ -197,7 +196,6 @@ app.post('/api/:codigo/alertas', async (req, res) => {
   if (dev.rowCount === 0)
     return res.status(404).json({ error: 'dispositivo no encontrado' });
 
-  // upsert
   await pool.query(
     `INSERT INTO alerts (device_code, bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
@@ -210,8 +208,8 @@ app.post('/api/:codigo/alertas', async (req, res) => {
        hum_max    = EXCLUDED.hum_max,
        active     = EXCLUDED.active,
        updated_at = NOW()`,
-    [codigo, body.bot_token || null, body.chat_id || null, body.temp_min || null, body.temp_max || null,
-     body.hum_min || null, body.hum_max || null, body.active !== false]
+    [codigo, bot_token || null, chat_id || null, temp_min || null, temp_max || null,
+     hum_min || null, hum_max || null, active !== false]
   );
 
   res.json({ ok: true });
