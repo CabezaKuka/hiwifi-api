@@ -22,11 +22,11 @@ function adminAuth(req, res, next) {
 app.get('/admin/auth', adminAuth, (req, res) => res.json({ ok: true }));
 
 // ─────────────────────────────────────────────
-//  Envío WhatsApp via CallMeBot
+//  Envío Telegram
 // ─────────────────────────────────────────────
-function enviarWhatsApp(phone, apikey, mensaje) {
+function enviarTelegram(botToken, chatId, mensaje) {
   const texto = encodeURIComponent(mensaje);
-  const url   = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${texto}&apikey=${apikey}`;
+  const url   = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&text=${texto}`;
   https.get(url, () => {}).on('error', () => {});
 }
 
@@ -36,7 +36,7 @@ function enviarWhatsApp(phone, apikey, mensaje) {
 async function verificarAlertas(device_code, temperature, humidity) {
   try {
     const result = await pool.query(
-      'SELECT * FROM alerts WHERE device_code = $1 AND active = TRUE AND phone IS NOT NULL AND apikey IS NOT NULL',
+      'SELECT * FROM alerts WHERE device_code = $1 AND active = TRUE AND bot_token IS NOT NULL AND chat_id IS NOT NULL',
       [device_code]
     );
     if (result.rowCount === 0) return;
@@ -54,7 +54,7 @@ async function verificarAlertas(device_code, temperature, humidity) {
       if (!ultimaTemp || (ahora - ultimaTemp) >= unaHora) {
         const dir = temperature < alert.temp_min ? 'baja' : 'alta';
         const msg = `⚠️ HiWIFI ${device_code}\nTemperatura ${dir}: ${temperature.toFixed(1)}°C\nRango configurado: ${alert.temp_min}° - ${alert.temp_max}°`;
-        enviarWhatsApp(alert.phone, alert.apikey, msg);
+        enviarTelegram(alert.bot_token, alert.chat_id, msg);
         await pool.query('UPDATE alerts SET last_temp_alert = NOW() WHERE device_code = $1', [device_code]);
       }
     }
@@ -68,7 +68,7 @@ async function verificarAlertas(device_code, temperature, humidity) {
       if (!ultimaHum || (ahora - ultimaHum) >= unaHora) {
         const dir = humidity < alert.hum_min ? 'baja' : 'alta';
         const msg = `⚠️ HiWIFI ${device_code}\nHumedad ${dir}: ${humidity.toFixed(0)}%\nRango configurado: ${alert.hum_min}% - ${alert.hum_max}%`;
-        enviarWhatsApp(alert.phone, alert.apikey, msg);
+        enviarTelegram(alert.bot_token, alert.chat_id, msg);
         await pool.query('UPDATE alerts SET last_hum_alert = NOW() WHERE device_code = $1', [device_code]);
       }
     }
@@ -154,7 +154,7 @@ app.get('/api/:codigo', async (req, res) => {
 
   // traer config de alertas si existe
   const alertRow = await pool.query(
-    'SELECT phone, apikey, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
+    'SELECT bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
     [codigo]
   );
   const alertConfig = alertRow.rowCount > 0 ? alertRow.rows[0] : null;
@@ -199,19 +199,19 @@ app.post('/api/:codigo/alertas', async (req, res) => {
 
   // upsert
   await pool.query(
-    `INSERT INTO alerts (device_code, phone, apikey, temp_min, temp_max, hum_min, hum_max, active, updated_at)
+    `INSERT INTO alerts (device_code, bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
      ON CONFLICT (device_code) DO UPDATE SET
-       phone      = EXCLUDED.phone,
-       apikey     = EXCLUDED.apikey,
+       bot_token  = EXCLUDED.bot_token,
+       chat_id    = EXCLUDED.chat_id,
        temp_min   = EXCLUDED.temp_min,
        temp_max   = EXCLUDED.temp_max,
        hum_min    = EXCLUDED.hum_min,
        hum_max    = EXCLUDED.hum_max,
        active     = EXCLUDED.active,
        updated_at = NOW()`,
-    [codigo, phone || null, apikey || null, temp_min || null, temp_max || null,
-     hum_min || null, hum_max || null, active !== false]
+    [codigo, body.bot_token || null, body.chat_id || null, body.temp_min || null, body.temp_max || null,
+     body.hum_min || null, body.hum_max || null, body.active !== false]
   );
 
   res.json({ ok: true });
