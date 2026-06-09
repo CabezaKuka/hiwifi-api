@@ -181,19 +181,19 @@
         <span style="font-size:13px">Alertas activas</span>
       </div>
 
-      <div class="alert-section-title">Contacto</div>
+      <div class="alert-section-title">Contacto Telegram</div>
       <div class="alert-grid2">
         <div>
-          <div class="alert-label">Número WhatsApp (con código país)</div>
-          <input type="text" id="alert-phone" placeholder="+59171234567">
+          <div class="alert-label">Bot Token</div>
+          <input type="text" id="alert-bot-token" placeholder="123456789:AAF...">
         </div>
         <div>
-          <div class="alert-label">API Key de CallMeBot</div>
-          <input type="text" id="alert-apikey" placeholder="123456">
+          <div class="alert-label">Chat ID</div>
+          <input type="text" id="alert-chat-id" placeholder="123456789">
         </div>
       </div>
       <div class="alert-info">
-        Para obtener tu API Key: agregá <b>+34 644 59 21 58</b> a tus contactos y enviále el mensaje: <b>I allow callmebot to send me messages</b>
+        Para configurar: buscá <b>@BotFather</b> en Telegram → <b>/newbot</b> → copiá el token. Luego abrí tu bot, mandále un mensaje y entrá a <b>api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</b> para copiar tu Chat ID.
       </div>
 
       <div class="alert-section-title">Rango de temperatura (°C)</div>
@@ -344,17 +344,16 @@ function toggleAlertPanel() {
 }
 
 function cargarConfigAlertas(cfg) {
-  document.getElementById('alert-active').checked  = cfg.active !== false;
-  document.getElementById('alert-phone').value     = cfg.phone    || '';
-  document.getElementById('alert-apikey').value    = cfg.apikey   || '';
-  document.getElementById('alert-temp-min').value  = cfg.temp_min != null ? cfg.temp_min : '';
-  document.getElementById('alert-temp-max').value  = cfg.temp_max != null ? cfg.temp_max : '';
-  document.getElementById('alert-hum-min').value   = cfg.hum_min  != null ? cfg.hum_min  : '';
-  document.getElementById('alert-hum-max').value   = cfg.hum_max  != null ? cfg.hum_max  : '';
+  document.getElementById('alert-active').checked      = cfg.active !== false;
+  document.getElementById('alert-bot-token').value     = cfg.bot_token || '';
+  document.getElementById('alert-chat-id').value       = cfg.chat_id   || '';
+  document.getElementById('alert-temp-min').value      = cfg.temp_min != null ? cfg.temp_min : '';
+  document.getElementById('alert-temp-max').value      = cfg.temp_max != null ? cfg.temp_max : '';
+  document.getElementById('alert-hum-min').value       = cfg.hum_min  != null ? cfg.hum_min  : '';
+  document.getElementById('alert-hum-max').value       = cfg.hum_max  != null ? cfg.hum_max  : '';
 
-  // badge en el header
   const badge = document.getElementById('alert-status-badge');
-  if (cfg.active && cfg.phone && cfg.apikey) {
+  if (cfg.active && cfg.bot_token && cfg.chat_id) {
     badge.innerHTML = '<span class="badge badge-ok">Activas</span>';
   } else {
     badge.innerHTML = '';
@@ -363,8 +362,8 @@ function cargarConfigAlertas(cfg) {
 
 async function guardarAlertas() {
   const body = {
-    phone:    document.getElementById('alert-phone').value.trim()   || null,
-    apikey:   document.getElementById('alert-apikey').value.trim()  || null,
+    bot_token: document.getElementById('alert-bot-token').value.trim() || null,
+    chat_id:   document.getElementById('alert-chat-id').value.trim()   || null,
     temp_min: parseFloat(document.getElementById('alert-temp-min').value) || null,
     temp_max: parseFloat(document.getElementById('alert-temp-max').value) || null,
     hum_min:  parseFloat(document.getElementById('alert-hum-min').value)  || null,
