@@ -164,6 +164,12 @@
       <span style="font-size:15px;color:#aaa">°C</span>
     </div>
   </div>
+  <div class="gap">
+    <div class="metric-card" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 20px">
+      <span id="estado-icon" style="font-size:20px">--</span>
+      <span id="estado-texto" style="font-size:15px;font-weight:600;color:#1a1a1a">--</span>
+    </div>
+  </div>
 
   <div class="gap refresh-row">
     <div id="last-update"></div>
@@ -296,7 +302,24 @@ async function loadData(code, rango) {
     if (data.current) {
       document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
       document.getElementById('val-hum').textContent  = data.current.humidity.toFixed(0);
-      document.getElementById('val-dew').textContent  = data.current.dew_point != null ? data.current.dew_point.toFixed(1) : '--';
+      const dew = data.current.dew_point;
+      document.getElementById('val-dew').textContent  = dew != null ? dew.toFixed(1) : '--';
+
+      // estado ambiental
+      const t = data.current.temperature, h = data.current.humidity;
+      let icon, texto, color;
+      if (dew != null && t - dew <= 2) {
+        icon = '🔴'; texto = 'Riesgo de condensación'; color = '#991b1b';
+      } else if (h > 80) {
+        icon = '🟡'; texto = 'Húmedo'; color = '#92400e';
+      } else if (h >= 60) {
+        icon = '🟢'; texto = 'Normal'; color = '#065f46';
+      } else {
+        icon = '🌵'; texto = 'Seco'; color = '#888';
+      }
+      document.getElementById('estado-icon').textContent  = icon;
+      document.getElementById('estado-texto').textContent = texto;
+      document.getElementById('estado-texto').style.color = color;
     }
 
     const ago = data.minutes_ago;
