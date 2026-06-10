@@ -9,46 +9,31 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #f0f0ee; color: #1a1a1a; min-height: 100vh; }
 
-  /* ── TOPBAR ── */
-  .topbar {
-    background: #fff; border-bottom: 1px solid #e8e8e5;
-    padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
-  }
+  .topbar { background: #fff; border-bottom: 1px solid #e8e8e5; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
   .logo-svg { height: 44px; width: auto; }
 
   .wrap { max-width: 680px; margin: 0 auto; padding: 20px 16px 40px; }
   .card { background: #fff; border: 1px solid #e8e8e5; border-radius: 14px; padding: 16px 20px; }
-  .gap  { margin-top: 12px; }
+  .gap { margin-top: 12px; }
 
-  /* ── BADGE ── */
   .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
   .badge-ok  { background: #d1fae5; color: #065f46; }
   .badge-off { background: #fee2e2; color: #991b1b; }
   .badge-unk { background: #f3f4f6; color: #6b7280; }
 
-  /* ── DEVICE NAME ── */
-  #device-name {
-    font-size: 20px; font-weight: 700; font-family: ui-monospace, monospace;
-    color: #1a1a1a; letter-spacing: -0.5px;
-  }
+  #device-name { font-size: 20px; font-weight: 700; font-family: ui-monospace, monospace; color: #1a1a1a; letter-spacing: -0.5px; }
 
-  /* ── GAUGES ── */
-  .gauges-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .gauge-card {
+  /* ── METRIC CARDS ── */
+  .metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric-card {
     background: #fff; border: 1px solid #e8e8e5; border-radius: 14px;
-    padding: 16px; text-align: center;
+    padding: 20px 16px 18px; text-align: center;
   }
-  .gauge-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
-  .gauge-wrap { position: relative; display: inline-block; }
-  .gauge-wrap canvas { display: block; }
-  .gauge-center {
-    position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%);
-    text-align: center; line-height: 1;
-  }
-  .gauge-val { font-size: 28px; font-weight: 700; letter-spacing: -1px; }
-  .gauge-unit { font-size: 12px; color: #aaa; margin-top: 3px; }
+  .metric-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 10px; }
+  .metric-value { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+  .metric-unit  { font-size: 16px; color: #aaa; margin-top: 6px; font-weight: 400; }
 
-  /* ── REFRESH ROW ── */
+  /* ── REFRESH ── */
   .refresh-row { display: flex; align-items: center; justify-content: space-between; }
   #last-update { font-size: 12px; color: #aaa; }
   #countdown   { font-size: 11px; color: #bbb; }
@@ -61,7 +46,7 @@
 
   /* ── CHARTS ── */
   .chart-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
-  canvas.chart { display: block; width: 100% !important; }
+  canvas { display: block; width: 100% !important; }
 
   /* ── RESUMEN ── */
   .summary-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; text-align: center; }
@@ -69,11 +54,7 @@
   .sum-val   { font-size: 16px; font-weight: 600; margin-top: 2px; }
 
   /* ── INPUTS ── */
-  input[type=text], input[type=number] {
-    width: 100%; padding: 10px 14px; font-size: 14px;
-    border: 1px solid #ddd; border-radius: 8px; outline: none;
-    background: #fff; color: #1a1a1a;
-  }
+  input[type=text], input[type=number] { width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid #ddd; border-radius: 8px; outline: none; background: #fff; color: #1a1a1a; }
   input[type=text]:focus, input[type=number]:focus { border-color: #1D9E75; }
   .btn-primary { width: 100%; padding: 11px; font-size: 14px; font-weight: 500; background: #1D9E75; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
   .btn-link { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
@@ -106,9 +87,10 @@
 
   @media (prefers-color-scheme: dark) {
     body { background: #161616; color: #e0e0d8; }
-    .topbar, .card, .gauge-card { background: #222; border-color: #2e2e2e; }
+    .topbar, .card, .metric-card { background: #222; border-color: #2e2e2e; }
     #device-name { color: #e0e0d8; }
-    .metric-label, #last-update, .sum-label, .chart-title, #countdown { color: #555; }
+    #last-update, .sum-label, .chart-title, #countdown, .metric-label { color: #555; }
+    .metric-unit { color: #444; }
     input[type=text], input[type=number] { background: #2a2a2a; border-color: #444; color: #e0e0d8; }
     .tab.active { background: #333; color: #e0e0d8; }
     .tab { color: #555; }
@@ -116,14 +98,12 @@
     .badge-unk { background: #333; color: #aaa; }
     .alert-header-title { color: #e0e0d8; }
     .toggle-slider { background: #444; }
-    .gauge-unit { color: #555; }
   }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <!-- Logo SVG inline -->
   <svg class="logo-svg" viewBox="0 0 420 100" xmlns="http://www.w3.org/2000/svg">
     <g transform="translate(45,50)">
       <path d="M0 -38 C-19 -14,-26 0,-26 12 C-26 27,-14 40,0 40 C14 40,26 27,26 12 C26 0,19 -14,0 -38 Z" fill="#1D9E75"/>
@@ -156,33 +136,22 @@
 <!-- DASHBOARD -->
 <div id="screen-dash" class="wrap" style="display:none">
 
-  <!-- nombre + badge -->
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div id="device-name">--</div>
     <div id="badge-wrap"></div>
   </div>
 
-  <!-- gauges -->
-  <div class="gap gauges-row">
-    <div class="gauge-card">
-      <div class="gauge-label">Temperatura</div>
-      <div class="gauge-wrap">
-        <canvas id="gauge-temp" width="180" height="110"></canvas>
-        <div class="gauge-center">
-          <div class="gauge-val" id="val-temp" style="color:#D85A30">--</div>
-          <div class="gauge-unit">°C</div>
-        </div>
-      </div>
+  <!-- métricas grandes -->
+  <div class="gap metrics-row">
+    <div class="metric-card">
+      <div class="metric-label">Temperatura</div>
+      <div class="metric-value" id="val-temp" style="color:#D85A30">--</div>
+      <div class="metric-unit">°C</div>
     </div>
-    <div class="gauge-card">
-      <div class="gauge-label">Humedad</div>
-      <div class="gauge-wrap">
-        <canvas id="gauge-hum" width="180" height="110"></canvas>
-        <div class="gauge-center">
-          <div class="gauge-val" id="val-hum" style="color:#378ADD">--</div>
-          <div class="gauge-unit">%</div>
-        </div>
-      </div>
+    <div class="metric-card">
+      <div class="metric-label">Humedad</div>
+      <div class="metric-value" id="val-hum" style="color:#378ADD">--</div>
+      <div class="metric-unit">%</div>
     </div>
   </div>
 
@@ -191,7 +160,6 @@
     <div id="countdown"></div>
   </div>
 
-  <!-- tabs + csv -->
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div class="tabs">
       <button class="tab active" onclick="setRango('24h',this)">24h</button>
@@ -203,12 +171,12 @@
 
   <div class="gap card">
     <div class="chart-title" style="color:#D85A30">Temperatura (°C)</div>
-    <canvas id="chart-temp" class="chart" height="140"></canvas>
+    <canvas id="chart-temp" height="140"></canvas>
   </div>
 
   <div class="gap card">
     <div class="chart-title" style="color:#378ADD">Humedad (%)</div>
-    <canvas id="chart-hum" class="chart" height="140"></canvas>
+    <canvas id="chart-hum" height="140"></canvas>
   </div>
 
   <div class="gap card">
@@ -223,18 +191,12 @@
   <!-- alertas telegram -->
   <div class="gap card">
     <div class="alert-header" onclick="toggleAlertPanel()">
-      <div class="alert-header-title">
-        🔔 Alertas por Telegram
-        <span id="alert-status-badge"></span>
-      </div>
+      <div class="alert-header-title">🔔 Alertas por Telegram <span id="alert-status-badge"></span></div>
       <span class="alert-toggle-arrow" id="alert-arrow">▼</span>
     </div>
     <div class="alert-body" id="alert-body">
       <div class="alert-active-row" style="margin-top:16px">
-        <label class="toggle-switch">
-          <input type="checkbox" id="alert-active">
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle-switch"><input type="checkbox" id="alert-active"><span class="toggle-slider"></span></label>
         <span style="font-size:13px">Alertas activas</span>
       </div>
       <div class="alert-section-title">Contacto Telegram</div>
@@ -268,71 +230,15 @@
 
 <script>
 let chartTemp = null, chartHum = null;
-let gaugeTemp = null, gaugeHum  = null;
 let currentCode = '', currentRango = '24h', lastReadings = [];
 let refreshTimer = null, countdownInterval = null, secondsLeft = 300;
-
-const dark      = matchMedia('(prefers-color-scheme:dark)').matches;
+const dark = matchMedia('(prefers-color-scheme:dark)').matches;
 const gridColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-const txtColor  = '#888';
+const txtColor = '#888';
 
-function saveCode(c)   { try { localStorage.setItem('hiwifi_code',c); } catch(e){} }
-function getSavedCode(){ try { return localStorage.getItem('hiwifi_code')||''; } catch(e){ return ''; } }
-function clearCode()   { try { localStorage.removeItem('hiwifi_code'); } catch(e){} }
-
-// ── Gauge SVG canvas ─────────────────────────────────────────────
-function drawGauge(canvasId, value, min, max, color) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const cx = W / 2, cy = H - 18;
-  const r  = Math.min(W, H * 1.8) / 2 - 10;
-  const startAngle = Math.PI;
-  const endAngle   = 2 * Math.PI;
-  const pct = Math.min(Math.max((value - min) / (max - min), 0), 1);
-  const valAngle = startAngle + pct * Math.PI;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // track background
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, startAngle, endAngle);
-  ctx.lineWidth = 14;
-  ctx.strokeStyle = dark ? '#2a2a2a' : '#f0f0ee';
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  // colored arc
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, startAngle, valAngle);
-  ctx.lineWidth = 14;
-  ctx.strokeStyle = color;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  // tick marks
-  for (let i = 0; i <= 4; i++) {
-    const a = startAngle + (i / 4) * Math.PI;
-    const x1 = cx + (r - 20) * Math.cos(a);
-    const y1 = cy + (r - 20) * Math.sin(a);
-    const x2 = cx + (r - 26) * Math.cos(a);
-    const y2 = cy + (r - 26) * Math.sin(a);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = dark ? '#444' : '#ccc';
-    ctx.stroke();
-  }
-
-  // min/max labels
-  ctx.font = '10px system-ui';
-  ctx.fillStyle = dark ? '#555' : '#aaa';
-  ctx.textAlign = 'center';
-  ctx.fillText(min, cx - r + 4, cy + 14);
-  ctx.fillText(max, cx + r - 4, cy + 14);
-}
+function saveCode(c)    { try { localStorage.setItem('hiwifi_code',c); } catch(e){} }
+function getSavedCode() { try { return localStorage.getItem('hiwifi_code')||''; } catch(e){ return ''; } }
+function clearCode()    { try { localStorage.removeItem('hiwifi_code'); } catch(e){} }
 
 async function login() {
   const code = document.getElementById('code-input').value.trim().toUpperCase();
@@ -364,7 +270,6 @@ async function loadData(code, rango) {
     const res = await fetch(`/api/${code}?rango=${rango}`);
     if (!res.ok) { document.getElementById('error-msg').style.display = 'block'; return; }
     const data = await res.json();
-
     currentCode = code; saveCode(code);
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-dash').style.display  = 'block';
@@ -376,11 +281,8 @@ async function loadData(code, rango) {
     document.getElementById('badge-wrap').innerHTML   = `<span class="badge ${badgeClass}">${badgeText}</span>`;
 
     if (data.current) {
-      const t = data.current.temperature, h = data.current.humidity;
-      document.getElementById('val-temp').textContent = t.toFixed(1);
-      document.getElementById('val-hum').textContent  = h.toFixed(0);
-      drawGauge('gauge-temp', t, -10, 60, '#D85A30');
-      drawGauge('gauge-hum',  h,   0, 100, '#378ADD');
+      document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
+      document.getElementById('val-hum').textContent  = data.current.humidity.toFixed(0);
     }
 
     const ago = data.minutes_ago;
@@ -400,15 +302,11 @@ async function loadData(code, rango) {
     });
     buildChartTemp(labels, lastReadings.map(r => r.t));
     buildChartHum(labels,  lastReadings.map(r => r.h));
-
     if (data.alert) cargarConfigAlertas(data.alert);
     startRefresh();
-  } catch(e) {
-    document.getElementById('error-msg').style.display = 'block';
-  }
+  } catch(e) { document.getElementById('error-msg').style.display = 'block'; }
 }
 
-// ── Alertas ───────────────────────────────────────────────────────
 function toggleAlertPanel() {
   document.getElementById('alert-body').classList.toggle('open');
   document.getElementById('alert-arrow').classList.toggle('open');
@@ -421,9 +319,8 @@ function cargarConfigAlertas(cfg) {
   document.getElementById('alert-temp-max').value  = cfg.temp_max != null ? cfg.temp_max : '';
   document.getElementById('alert-hum-min').value   = cfg.hum_min  != null ? cfg.hum_min  : '';
   document.getElementById('alert-hum-max').value   = cfg.hum_max  != null ? cfg.hum_max  : '';
-  const badge = document.getElementById('alert-status-badge');
-  badge.innerHTML = (cfg.active && cfg.bot_token && cfg.chat_id)
-    ? '<span class="badge badge-ok">Activas</span>' : '';
+  document.getElementById('alert-status-badge').innerHTML =
+    (cfg.active && cfg.bot_token && cfg.chat_id) ? '<span class="badge badge-ok">Activas</span>' : '';
 }
 async function guardarAlertas() {
   const body = {
@@ -447,7 +344,6 @@ async function guardarAlertas() {
   setTimeout(() => { msgEl.className = 'alert-msg'; }, 4000);
 }
 
-// ── Refresh ────────────────────────────────────────────────────────
 function startRefresh() {
   stopRefresh(); secondsLeft = 300; updateCountdown();
   countdownInterval = setInterval(() => { secondsLeft--; updateCountdown(); }, 1000);
@@ -463,7 +359,6 @@ function updateCountdown() {
   document.getElementById('countdown').textContent = `Actualiza en ${m}:${s.toString().padStart(2,'0')}`;
 }
 
-// ── CSV ────────────────────────────────────────────────────────────
 function descargarCSV() {
   if (!lastReadings.length) return;
   const header = 'Fecha/Hora,Temperatura (°C),Humedad (%)';
@@ -472,13 +367,12 @@ function descargarCSV() {
     return `${d.toLocaleDateString('es-AR')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')},${r.t},${r.h}`;
   });
   const blob = new Blob([[header,...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url; a.download = `hiwifi_${currentCode}_${currentRango}.csv`;
   a.click(); URL.revokeObjectURL(url);
 }
 
-// ── Gráficos ───────────────────────────────────────────────────────
 function buildChartTemp(labels, temps) {
   if (chartTemp) chartTemp.destroy();
   chartTemp = new Chart(document.getElementById('chart-temp').getContext('2d'), {
