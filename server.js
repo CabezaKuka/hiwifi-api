@@ -95,9 +95,16 @@ app.post('/datos', async (req, res) => {
 
   const { id: device_id, device_code } = dev.rows[0];
 
+  // calcular punto de rocío (fórmula de Magnus)
+  const T  = parseFloat(temperature);
+  const H  = parseFloat(humidity);
+  const a  = 6.112 * Math.exp(17.67 * T / (T + 243.5));
+  const gm = Math.log(H / 100 * a / 6.112);
+  const dew_point = parseFloat((243.5 * gm / (17.67 - gm)).toFixed(2));
+
   await pool.query(
-    'INSERT INTO readings (device_id, temperature, humidity) VALUES ($1, $2, $3)',
-    [device_id, temperature, humidity]
+    'INSERT INTO readings (device_id, temperature, humidity, dew_point) VALUES ($1, $2, $3, $4)',
+    [device_id, temperature, humidity, dew_point]
   );
 
   await pool.query(
@@ -134,7 +141,7 @@ app.get('/api/:codigo', async (req, res) => {
   const device = dev.rows[0];
 
   const readings = await pool.query(
-    `SELECT temperature, humidity, recorded_at
+    `SELECT temperature, humidity, dew_point, recorded_at
      FROM   readings
      WHERE  device_id = $1
        AND  recorded_at > NOW() - INTERVAL '${interval}'
@@ -152,7 +159,6 @@ app.get('/api/:codigo', async (req, res) => {
     : null;
   const online = minutesAgo !== null && minutesAgo <= 15;
 
-  // traer config de alertas si existe
   const alertRow = await pool.query(
     'SELECT bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
     [codigo]
@@ -164,9 +170,11 @@ app.get('/api/:codigo', async (req, res) => {
     location:    device.location,
     online,
     minutes_ago: minutesAgo,
+    last_seen_at: last ? last.recorded_at : null,
     current: last ? {
       temperature: parseFloat(last.temperature),
-      humidity:    parseFloat(last.humidity)
+      humidity:    parseFloat(last.humidity),
+      dew_point:   last.dew_point != null ? parseFloat(last.dew_point) : null
     } : null,
     summary: rows.length ? {
       temp_min: Math.min(...temps).toFixed(1),
@@ -176,6 +184,7 @@ app.get('/api/:codigo', async (req, res) => {
     readings: rows.map(r => ({
       t:  parseFloat(r.temperature),
       h:  parseFloat(r.humidity),
+      d:  r.dew_point != null ? parseFloat(r.dew_point) : null,
       ts: r.recorded_at
     })),
     alert: alertConfig
