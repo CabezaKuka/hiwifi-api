@@ -157,6 +157,13 @@
       <div class="metric-unit">%</div>
     </div>
   </div>
+  <div class="gap">
+    <div class="metric-card" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px">
+      <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.7px">Punto de rocío</span>
+      <span style="font-size:28px;font-weight:700;color:#1D9E75;letter-spacing:-1px" id="val-dew">--</span>
+      <span style="font-size:15px;color:#aaa">°C</span>
+    </div>
+  </div>
 
   <div class="gap refresh-row">
     <div id="last-update"></div>
@@ -289,11 +296,19 @@ async function loadData(code, rango) {
     if (data.current) {
       document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
       document.getElementById('val-hum').textContent  = data.current.humidity.toFixed(0);
+      document.getElementById('val-dew').textContent  = data.current.dew_point != null ? data.current.dew_point.toFixed(1) : '--';
     }
 
     const ago = data.minutes_ago;
-    document.getElementById('last-update').textContent =
-      ago === null ? '' : ago === 0 ? 'Última lectura: hace menos de 1 min' : `Última lectura: hace ${ago} min`;
+    let lastStr = '';
+    if (ago !== null) {
+      const d = new Date(data.last_seen_at);
+      const fecha = d.toLocaleDateString('es-AR');
+      const hora  = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+      const agoTxt = ago === 0 ? 'hace menos de 1 min' : `hace ${ago} min`;
+      lastStr = `Última lectura: ${agoTxt} (${fecha} ${hora})`;
+    }
+    document.getElementById('last-update').textContent = lastStr;
 
     if (data.summary) {
       document.getElementById('sum-tmin').textContent = data.summary.temp_min + '°';
