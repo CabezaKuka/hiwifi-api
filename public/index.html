@@ -137,7 +137,10 @@
 <div id="screen-dash" class="wrap" style="display:none">
 
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <div id="device-name">--</div>
+    <div>
+      <div id="device-name">--</div>
+      <div id="device-location" style="font-size:12px;color:#888;margin-top:3px;display:none"></div>
+    </div>
     <div id="badge-wrap"></div>
   </div>
 
@@ -274,6 +277,9 @@ async function loadData(code, rango) {
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-dash').style.display  = 'block';
     document.getElementById('device-name').textContent = data.device_code;
+    const locEl = document.getElementById('device-location');
+    if (data.location) { locEl.textContent = data.location; locEl.style.display = 'inline'; }
+    else               { locEl.style.display = 'none'; }
 
     const badgeClass = data.online ? 'badge-ok' : (data.minutes_ago === null ? 'badge-unk' : 'badge-off');
     const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
