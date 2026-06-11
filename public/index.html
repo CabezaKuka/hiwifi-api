@@ -85,6 +85,10 @@
   .alert-msg.err { background: #fee2e2; color: #991b1b; display: block; }
   .alert-info { font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 6px; }
 
+  .offline-banner { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 14px; padding: 14px 20px; display: none; }
+  .offline-banner-text { font-size: 14px; font-weight: 600; color: #991b1b; }
+  .offline-banner-sub  { font-size: 12px; color: #b91c1c; margin-top: 4px; }
+
   @media (prefers-color-scheme: dark) {
     body { background: #161616; color: #e0e0d8; }
     .topbar, .card, .metric-card { background: #222; border-color: #2e2e2e; }
@@ -135,6 +139,12 @@
 
 <!-- DASHBOARD -->
 <div id="screen-dash" class="wrap" style="display:none">
+
+  <!-- banner offline -->
+  <div class="offline-banner gap" id="offline-banner">
+    <div class="offline-banner-text">📵 Equipo sin señal hace más de 1 hora</div>
+    <div class="offline-banner-sub" id="offline-banner-sub"></div>
+  </div>
 
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div>
@@ -241,6 +251,9 @@
 
   <div class="gap" style="text-align:center;padding-bottom:20px">
     <button class="btn-link" onclick="logout()">Salir · cambiar dispositivo</button>
+    <div style="margin-top:10px">
+      <button class="btn-link" onclick="copiarLinkPublico()" id="btn-share">🔗 Copiar link público</button>
+    </div>
   </div>
 </div>
 
@@ -298,6 +311,18 @@ async function loadData(code, rango) {
     const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
     document.getElementById('topbar-right').innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
     document.getElementById('badge-wrap').innerHTML   = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+
+    // banner offline
+    const banner = document.getElementById('offline-banner');
+    if (data.offline) {
+      const d = new Date(data.last_seen_at);
+      const fecha = d.toLocaleDateString('es-AR');
+      const hora  = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+      document.getElementById('offline-banner-sub').textContent = `Sin señal desde ${fecha} ${hora}`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
 
     if (data.current) {
       document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
@@ -441,6 +466,15 @@ function buildChartHum(labels, hums) {
         y: { min: 0, max: 100, ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20, callback: v => v+'%' }, grid: { color: gridColor } }
       }
     }
+  });
+}
+
+function copiarLinkPublico() {
+  const url = `${location.origin}/p/${currentCode}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('btn-share');
+    btn.textContent = '✓ Link copiado';
+    setTimeout(() => { btn.textContent = '🔗 Copiar link público'; }, 2000);
   });
 }
 
