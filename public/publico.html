@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HiWIFI · Datos públicos</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f0f0ee; color: #1a1a1a; min-height: 100vh; }
+  .topbar { background: #fff; border-bottom: 1px solid #e8e8e5; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .logo-svg { height: 44px; width: auto; }
+  .badge-readonly { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: #f3f4f6; color: #6b7280; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 20px 16px 40px; }
+  .card { background: #fff; border: 1px solid #e8e8e5; border-radius: 14px; padding: 16px 20px; }
+  .gap { margin-top: 12px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
+  .badge-ok  { background: #d1fae5; color: #065f46; }
+  .badge-off { background: #fee2e2; color: #991b1b; }
+  .badge-unk { background: #f3f4f6; color: #6b7280; }
+  #device-name { font-size: 20px; font-weight: 700; font-family: ui-monospace, monospace; color: #1a1a1a; letter-spacing: -0.5px; }
+  .metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric-card { background: #fff; border: 1px solid #e8e8e5; border-radius: 14px; padding: 20px 16px 18px; text-align: center; }
+  .metric-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 10px; }
+  .metric-value { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+  .metric-unit  { font-size: 16px; color: #aaa; margin-top: 6px; font-weight: 400; }
+  .refresh-row { display: flex; align-items: center; justify-content: space-between; }
+  #last-update { font-size: 12px; color: #aaa; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { font-size: 13px; padding: 5px 14px; border-radius: 6px; border: none; background: transparent; color: #888; cursor: pointer; }
+  .tab.active { background: #f0f0ee; color: #1a1a1a; font-weight: 500; }
+  .btn-csv { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; border: 1px solid #a7f3d0; background: #d1fae5; color: #065f46; cursor: pointer; }
+  .chart-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+  canvas { display: block; width: 100% !important; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; text-align: center; }
+  .sum-label { font-size: 11px; color: #aaa; }
+  .sum-val   { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .offline-banner { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 14px; padding: 14px 20px; display: none; }
+  .offline-banner-text { font-size: 14px; font-weight: 600; color: #991b1b; }
+  .offline-banner-sub  { font-size: 12px; color: #b91c1c; margin-top: 4px; }
+  .footer-note { font-size: 11px; color: #bbb; text-align: center; margin-top: 20px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #161616; color: #e0e0d8; }
+    .topbar, .card, .metric-card { background: #222; border-color: #2e2e2e; }
+    #device-name { color: #e0e0d8; }
+    #last-update, .sum-label, .chart-title, .metric-label { color: #555; }
+    .metric-unit { color: #444; }
+    .tab.active { background: #333; color: #e0e0d8; }
+    .tab { color: #555; }
+    .btn-csv { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <svg class="logo-svg" viewBox="0 0 420 100" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(45,50)">
+      <path d="M0 -38 C-19 -14,-26 0,-26 12 C-26 27,-14 40,0 40 C14 40,26 27,26 12 C26 0,19 -14,0 -38 Z" fill="#1D9E75"/>
+      <path d="M-15 7 Q0 -5 15 7" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+      <path d="M-9 16 Q0 8 9 16" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="0" cy="23" r="3" fill="white"/>
+    </g>
+    <text x="84" y="58" font-family="system-ui,sans-serif" font-size="48" font-weight="700" letter-spacing="-1" fill="#1a1a1a">Hi</text>
+    <text x="126" y="58" font-family="system-ui,sans-serif" font-size="48" font-weight="700" letter-spacing="-1" fill="#1D9E75">WIFI</text>
+    <text x="86" y="76" font-family="system-ui,sans-serif" font-size="11" font-weight="400" fill="#888" letter-spacing="2.5">MEDICIÓN EN TIEMPO REAL</text>
+    <line x1="86" y1="83" x2="196" y2="83" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="201" cy="83" r="3.5" fill="#1D9E75"/>
+    <line x1="206" y1="83" x2="316" y2="83" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <span class="badge-readonly">Vista pública · Solo lectura</span>
+</div>
+
+<div class="wrap">
+
+  <!-- banner offline -->
+  <div class="offline-banner gap" id="offline-banner">
+    <div class="offline-banner-text">📵 Equipo sin señal</div>
+    <div class="offline-banner-sub" id="offline-banner-sub"></div>
+  </div>
+
+  <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div>
+      <div id="device-name">--</div>
+      <div id="device-location" style="font-size:12px;color:#888;margin-top:3px;display:none"></div>
+    </div>
+    <div id="badge-wrap"></div>
+  </div>
+
+  <div class="gap metrics-row">
+    <div class="metric-card">
+      <div class="metric-label">Temperatura</div>
+      <div class="metric-value" id="val-temp" style="color:#D85A30">--</div>
+      <div class="metric-unit">°C</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Humedad</div>
+      <div class="metric-value" id="val-hum" style="color:#378ADD">--</div>
+      <div class="metric-unit">%</div>
+    </div>
+  </div>
+
+  <div class="gap">
+    <div class="metric-card" style="padding:16px 20px;text-align:center">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Análisis ambiental</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
+        <span style="font-size:14px;color:#888">Punto de rocío: <span id="val-dew" style="font-size:18px;font-weight:700;color:#1D9E75">--</span> <span style="font-size:13px;color:#aaa">°C</span></span>
+        <span style="color:#ddd">|</span>
+        <span style="font-size:14px;color:#888">Estado: <span id="estado-icon" style="font-size:16px">--</span> <span id="estado-texto" style="font-size:16px;font-weight:700">--</span></span>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#bbb;border-top:1px solid #f0f0ee;padding-top:8px">
+        🌵 Seco &lt;60% &nbsp;·&nbsp; 🟢 Normal 60–80% &nbsp;·&nbsp; 🟡 Húmedo &gt;80% &nbsp;·&nbsp; 🔴 Condensación si Tr ≥ T−2°
+      </div>
+    </div>
+  </div>
+
+  <div class="gap refresh-row">
+    <div id="last-update"></div>
+  </div>
+
+  <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div class="tabs">
+      <button class="tab active" onclick="setRango('24h',this)">24h</button>
+      <button class="tab" onclick="setRango('7d',this)">7 días</button>
+      <button class="tab" onclick="setRango('30d',this)">30 días</button>
+    </div>
+    <button class="btn-csv" onclick="descargarCSV()">⬇ CSV</button>
+  </div>
+
+  <div class="gap card">
+    <div class="chart-title" style="color:#D85A30">Temperatura (°C)</div>
+    <canvas id="chart-temp" height="140"></canvas>
+  </div>
+
+  <div class="gap card">
+    <div class="chart-title" style="color:#378ADD">Humedad (%)</div>
+    <canvas id="chart-hum" height="140"></canvas>
+  </div>
+
+  <div class="gap card">
+    <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Resumen del período</div>
+    <div class="summary-grid">
+      <div><div class="sum-label">Temp. mín.</div><div class="sum-val" id="sum-tmin" style="color:#D85A30">--</div></div>
+      <div><div class="sum-label">Temp. máx.</div><div class="sum-val" id="sum-tmax" style="color:#D85A30">--</div></div>
+      <div><div class="sum-label">Hum. prom.</div><div class="sum-val" id="sum-havg" style="color:#378ADD">--</div></div>
+    </div>
+  </div>
+
+  <div class="footer-note gap">Datos provistos por HiWIFI · Vista de solo lectura</div>
+
+</div>
+
+<script>
+let chartTemp = null, chartHum = null;
+let currentRango = '24h', lastReadings = [];
+const dark = matchMedia('(prefers-color-scheme:dark)').matches;
+const gridColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+const txtColor = '#888';
+
+// obtener código del dispositivo de la URL /p/:codigo
+const codigo = location.pathname.split('/').pop().toUpperCase();
+
+function setRango(rango, btn) {
+  currentRango = rango;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadData(rango);
+}
+
+async function loadData(rango) {
+  try {
+    const res = await fetch(`/publico/${codigo}?rango=${rango}`);
+    if (!res.ok) { document.getElementById('device-name').textContent = 'Dispositivo no encontrado'; return; }
+    const data = await res.json();
+
+    document.getElementById('device-name').textContent = data.device_code;
+    const locEl = document.getElementById('device-location');
+    if (data.location) { locEl.textContent = data.location; locEl.style.display = 'inline'; }
+    else               { locEl.style.display = 'none'; }
+
+    // banner offline
+    const banner = document.getElementById('offline-banner');
+    if (data.offline) {
+      const d = new Date(data.last_seen_at);
+      const fecha = d.toLocaleDateString('es-AR');
+      const hora  = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+      document.getElementById('offline-banner-sub').textContent = `Sin señal desde ${fecha} ${hora}`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+
+    const badgeClass = data.online ? 'badge-ok' : (data.minutes_ago === null ? 'badge-unk' : 'badge-off');
+    const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
+    document.getElementById('badge-wrap').innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+
+    if (data.current) {
+      document.getElementById('val-temp').textContent = data.current.temperature.toFixed(1);
+      document.getElementById('val-hum').textContent  = data.current.humidity.toFixed(0);
+      const dew = data.current.dew_point;
+      document.getElementById('val-dew').textContent  = dew != null ? dew.toFixed(1) : '--';
+
+      const t = data.current.temperature, h = data.current.humidity;
+      let icon, texto, color;
+      if (dew != null && t - dew <= 2) { icon = '🔴'; texto = 'Riesgo de condensación'; color = '#991b1b'; }
+      else if (h > 80)  { icon = '🟡'; texto = 'Húmedo'; color = '#92400e'; }
+      else if (h >= 60) { icon = '🟢'; texto = 'Normal';  color = '#065f46'; }
+      else              { icon = '🌵'; texto = 'Seco';    color = '#888'; }
+      document.getElementById('estado-icon').textContent  = icon;
+      document.getElementById('estado-texto').textContent = texto;
+      document.getElementById('estado-texto').style.color = color;
+    }
+
+    if (data.minutes_ago !== null) {
+      const d = new Date(data.last_seen_at);
+      const fecha = d.toLocaleDateString('es-AR');
+      const hora  = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+      const agoTxt = data.minutes_ago === 0 ? 'hace menos de 1 min' : `hace ${data.minutes_ago} min`;
+      document.getElementById('last-update').textContent = `Última lectura: ${agoTxt} (${fecha} ${hora})`;
+    }
+
+    if (data.summary) {
+      document.getElementById('sum-tmin').textContent = data.summary.temp_min + '°';
+      document.getElementById('sum-tmax').textContent = data.summary.temp_max + '°';
+      document.getElementById('sum-havg').textContent = data.summary.hum_avg  + '%';
+    }
+
+    lastReadings = data.readings || [];
+    const labels = lastReadings.map(r => {
+      const d = new Date(r.ts);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    });
+    buildChartTemp(labels, lastReadings.map(r => r.t));
+    buildChartHum(labels,  lastReadings.map(r => r.h));
+
+  } catch(e) { console.error(e); }
+}
+
+function descargarCSV() {
+  if (!lastReadings.length) return;
+  const header = 'Fecha/Hora,Temperatura (°C),Humedad (%)';
+  const rows = lastReadings.map(r => {
+    const d = new Date(r.ts);
+    return `${d.toLocaleDateString('es-AR')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')},${r.t},${r.h}`;
+  });
+  const blob = new Blob([[header,...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `hiwifi_${codigo}_${currentRango}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function buildChartTemp(labels, temps) {
+  if (chartTemp) chartTemp.destroy();
+  chartTemp = new Chart(document.getElementById('chart-temp').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: temps, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.07)', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
+        y: { ticks: { color: '#D85A30', font: { size: 10 }, callback: v => v+'°' }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+function buildChartHum(labels, hums) {
+  if (chartHum) chartHum.destroy();
+  chartHum = new Chart(document.getElementById('chart-hum').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: hums, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
+        y: { min: 0, max: 100, ticks: { color: '#378ADD', font: { size: 10 }, stepSize: 20, callback: v => v+'%' }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+loadData(currentRango);
+setInterval(() => loadData(currentRango), 300000);
+</script>
+</body>
+</html>
