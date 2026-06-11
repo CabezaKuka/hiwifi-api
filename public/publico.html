@@ -107,6 +107,10 @@
         <span style="font-size:14px;color:#888">Punto de rocío: <span id="val-dew" style="font-size:18px;font-weight:700;color:#1D9E75">--</span> <span style="font-size:13px;color:#aaa">°C</span></span>
         <span style="color:#ddd">|</span>
         <span style="font-size:14px;color:#888">Estado: <span id="estado-icon" style="font-size:16px">--</span> <span id="estado-texto" style="font-size:16px;font-weight:700">--</span></span>
+        <span id="cond-wrap" style="display:none;align-items:center;gap:4px">
+          <span style="color:#ddd">|</span>
+          <span style="font-size:14px;color:#888">Condensación: <span id="cond-icon" style="font-size:16px">--</span> <span id="cond-texto" style="font-size:14px;font-weight:700">--</span></span>
+        </span>
       </div>
       <div style="margin-top:10px;font-size:10px;color:#bbb;border-top:1px solid #f0f0ee;padding-top:8px">
         🌵 Seco &lt;60% &nbsp;·&nbsp; 🟢 Normal 60–80% &nbsp;·&nbsp; 🟡 Húmedo &gt;80% &nbsp;·&nbsp; 🔴 Condensación si Tr ≥ T−2°
@@ -201,14 +205,32 @@ async function loadData(rango) {
       document.getElementById('val-dew').textContent  = dew != null ? dew.toFixed(1) : '--';
 
       const t = data.current.temperature, h = data.current.humidity;
+
+      // estado humedad
       let icon, texto, color;
-      if (dew != null && t - dew <= 2) { icon = '🔴'; texto = 'Riesgo de condensación'; color = '#991b1b'; }
-      else if (h > 80)  { icon = '🟡'; texto = 'Húmedo'; color = '#92400e'; }
-      else if (h >= 60) { icon = '🟢'; texto = 'Normal';  color = '#065f46'; }
-      else              { icon = '🌵'; texto = 'Seco';    color = '#888'; }
+      if (h > 80)       { icon = '🟡'; texto = 'Húmedo'; color = '#92400e'; }
+      else if (h >= 60) { icon = '🟢'; texto = 'Normal'; color = '#065f46'; }
+      else              { icon = '🌵'; texto = 'Seco';   color = '#888';    }
       document.getElementById('estado-icon').textContent  = icon;
       document.getElementById('estado-texto').textContent = texto;
       document.getElementById('estado-texto').style.color = color;
+
+      // riesgo condensación por ΔT
+      if (dew != null) {
+        const dt = t - dew;
+        let rIcon, rTexto, rColor;
+        if      (dt > 5) { rIcon = '🟢'; rTexto = 'Muy bajo';  rColor = '#065f46'; }
+        else if (dt > 3) { rIcon = '🟢'; rTexto = 'Bajo';      rColor = '#065f46'; }
+        else if (dt > 2) { rIcon = '🟡'; rTexto = 'Moderado';  rColor = '#92400e'; }
+        else if (dt > 1) { rIcon = '🟠'; rTexto = 'Alto';      rColor = '#c2410c'; }
+        else             { rIcon = '🔴'; rTexto = 'Muy alto';  rColor = '#991b1b'; }
+        document.getElementById('cond-icon').textContent  = rIcon;
+        document.getElementById('cond-texto').textContent = rTexto + ' (ΔT ' + dt.toFixed(1) + '°)';
+        document.getElementById('cond-texto').style.color = rColor;
+        document.getElementById('cond-wrap').style.display = 'flex';
+      } else {
+        document.getElementById('cond-wrap').style.display = 'none';
+      }
     }
 
     if (data.minutes_ago !== null) {
