@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HiWIFI · Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #f0f0ee; color: #1a1a1a; min-height: 100vh; }
@@ -43,6 +45,7 @@
   .tab { font-size: 13px; padding: 5px 14px; border-radius: 6px; border: none; background: transparent; color: #888; cursor: pointer; }
   .tab.active { background: #f0f0ee; color: #1a1a1a; font-weight: 500; }
   .btn-csv { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; border: 1px solid #a7f3d0; background: #d1fae5; color: #065f46; cursor: pointer; }
+  .btn-pdf { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; cursor: pointer; }
 
   /* ── CHARTS ── */
   .chart-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
@@ -192,7 +195,10 @@
       <button class="tab" onclick="setRango('7d',this)">7 días</button>
       <button class="tab" onclick="setRango('30d',this)">30 días</button>
     </div>
-    <button class="btn-csv" onclick="descargarCSV()">⬇ CSV</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn-csv" onclick="descargarCSV()">⬇ CSV</button>
+      <button class="btn-pdf" id="btn-pdf" onclick="generarPDF()">📄 Reporte PDF</button>
+    </div>
   </div>
 
   <div class="gap card">
@@ -476,6 +482,190 @@ function copiarLinkPublico() {
     btn.textContent = '✓ Link copiado';
     setTimeout(() => { btn.textContent = '🔗 Copiar link público'; }, 2000);
   });
+}
+
+// ── Reporte PDF ───────────────────────────────────────────────────
+async function generarPDF() {
+  const btn = document.getElementById('btn-pdf');
+  btn.textContent = '⏳ Generando...';
+  btn.disabled = true;
+
+  try {
+    // traer los tres rangos
+    const [r24, r7d, r30d] = await Promise.all([
+      fetch(`/api/${currentCode}?rango=24h`).then(r => r.json()),
+      fetch(`/api/${currentCode}?rango=7d`).then(r => r.json()),
+      fetch(`/api/${currentCode}?rango=30d`).then(r => r.json())
+    ]);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210, margin = 18;
+    let y = 0;
+
+    // ── Encabezado verde ──
+    doc.setFillColor(29, 158, 117);
+    doc.rect(0, 0, W, 32, 'F');
+
+    // Logo texto
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.text('Hi', margin, 14);
+    doc.setFontSize(22);
+    const hiW = doc.getTextWidth('Hi');
+    doc.text('WIFI', margin + hiW + 1, 14);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(200, 240, 225);
+    doc.text('MEDICIÓN EN TIEMPO REAL', margin, 20);
+
+    // Línea decorativa con nodo
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.4);
+    doc.line(margin, 24, margin + 55, 24);
+    doc.setFillColor(255, 255, 255);
+    doc.circle(margin + 57, 24, 1.2, 'F');
+    doc.line(margin + 59, 24, margin + 114, 24);
+
+    // Título del reporte
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Reporte Ambiental', W - margin, 14, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(200, 240, 225);
+    const ahora = new Date();
+    doc.text(`Generado: ${ahora.toLocaleDateString('es-AR')} ${ahora.getHours().toString().padStart(2,'0')}:${ahora.getMinutes().toString().padStart(2,'0')}`, W - margin, 20, { align: 'right' });
+
+    y = 42;
+
+    // ── Datos del dispositivo ──
+    doc.setTextColor(30, 30, 30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(r24.device_code || currentCode, margin, y);
+    y += 6;
+    if (r24.location) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text(r24.location, margin, y);
+      y += 5;
+    }
+
+    // última lectura
+    if (r24.last_seen_at) {
+      const d = new Date(r24.last_seen_at);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Última lectura: ${d.toLocaleDateString('es-AR')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`, margin, y);
+    }
+
+    y += 10;
+
+    // ── Tabla de resumen ──
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(29, 158, 117);
+    doc.text('Resumen de condiciones', margin, y);
+    y += 4;
+
+    const periodos = [
+      { label: 'Últimas 24 horas', data: r24.summary },
+      { label: 'Últimos 7 días',   data: r7d.summary  },
+      { label: 'Últimos 30 días',  data: r30d.summary  }
+    ];
+
+    const tableBody = periodos.map(p => [
+      p.label,
+      p.data ? p.data.temp_min + ' °C' : '--',
+      p.data ? p.data.temp_max + ' °C' : '--',
+      p.data ? (p.data.temp_min && p.data.temp_max
+        ? ((parseFloat(p.data.temp_min) + parseFloat(p.data.temp_max)) / 2).toFixed(1) + ' °C'
+        : '--') : '--',
+      p.data ? p.data.hum_avg + ' %' : '--'
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Período', 'Temp. mín.', 'Temp. máx.', 'Temp. media', 'Hum. promedio']],
+      body: tableBody,
+      margin: { left: margin, right: margin },
+      headStyles: {
+        fillColor: [29, 158, 117],
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      bodyStyles: { fontSize: 9, textColor: [40, 40, 40] },
+      alternateRowStyles: { fillColor: [245, 250, 247] },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 48 },
+        1: { halign: 'center' },
+        2: { halign: 'center' },
+        3: { halign: 'center' },
+        4: { halign: 'center' }
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 12;
+
+    // ── Lectura actual ──
+    if (r24.current) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(29, 158, 117);
+      doc.text('Lectura actual', margin, y);
+      y += 6;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Temperatura: ${r24.current.temperature.toFixed(1)} °C`, margin, y);
+      doc.text(`Humedad: ${r24.current.humidity.toFixed(0)} %`, margin + 55, y);
+      if (r24.current.dew_point != null) {
+        doc.text(`Punto de rocío: ${r24.current.dew_point.toFixed(1)} °C`, margin + 110, y);
+      }
+      y += 5;
+
+      // estado ambiental
+      const t = r24.current.temperature, h = r24.current.humidity, dew = r24.current.dew_point;
+      let estado = 'Seco';
+      if (dew != null && t - dew <= 2) estado = 'Riesgo de condensación';
+      else if (h > 80)  estado = 'Húmedo';
+      else if (h >= 60) estado = 'Normal';
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Estado ambiental: ${estado}`, margin, y);
+      y += 10;
+    }
+
+    // ── Pie de página ──
+    const pageH = 297;
+    doc.setDrawColor(29, 158, 117);
+    doc.setLineWidth(0.3);
+    doc.line(margin, pageH - 14, W - margin, pageH - 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(160, 160, 160);
+    doc.text('HiWIFI · Medición en tiempo real · hiwifi-api-production.up.railway.app', W / 2, pageH - 9, { align: 'center' });
+
+    // guardar
+    const filename = `hiwifi_reporte_${currentCode}_${ahora.toLocaleDateString('es-AR').replace(/\//g,'-')}.pdf`;
+    doc.save(filename);
+
+  } catch(e) {
+    console.error(e);
+    alert('Error al generar el reporte. Intentá de nuevo.');
+  }
+
+  btn.textContent = '📄 Reporte PDF';
+  btn.disabled = false;
 }
 
 document.getElementById('code-input').addEventListener('keydown', e => { if (e.key==='Enter') login(); });
