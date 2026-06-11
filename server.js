@@ -31,7 +31,7 @@ function enviarTelegram(botToken, chatId, mensaje) {
 }
 
 // ─────────────────────────────────────────────
-//  Verificar y disparar alertas
+//  Verificar alertas de valores
 // ─────────────────────────────────────────────
 async function verificarAlertas(device_code, temperature, humidity) {
   try {
@@ -45,10 +45,8 @@ async function verificarAlertas(device_code, temperature, humidity) {
     const ahora = new Date();
     const unaHora = 60 * 60 * 1000;
 
-    // ── Alerta temperatura ──
     const tempFuera = (alert.temp_min != null && temperature < alert.temp_min) ||
                       (alert.temp_max != null && temperature > alert.temp_max);
-
     if (tempFuera) {
       const ultimaTemp = alert.last_temp_alert ? new Date(alert.last_temp_alert) : null;
       if (!ultimaTemp || (ahora - ultimaTemp) >= unaHora) {
@@ -59,10 +57,8 @@ async function verificarAlertas(device_code, temperature, humidity) {
       }
     }
 
-    // ── Alerta humedad ──
     const humFuera = (alert.hum_min != null && humidity < alert.hum_min) ||
                      (alert.hum_max != null && humidity > alert.hum_max);
-
     if (humFuera) {
       const ultimaHum = alert.last_hum_alert ? new Date(alert.last_hum_alert) : null;
       if (!ultimaHum || (ahora - ultimaHum) >= unaHora) {
@@ -76,6 +72,48 @@ async function verificarAlertas(device_code, temperature, humidity) {
     console.error('Error verificando alertas:', e.message);
   }
 }
+
+// ─────────────────────────────────────────────
+//  Verificar dispositivos offline (cada 5 min)
+// ─────────────────────────────────────────────
+async function verificarOffline() {
+  try {
+    // dispositivos activos con alerta configurada y sin señal hace más de 1 hora
+    const result = await pool.query(`
+      SELECT d.device_code, d.last_seen_at, a.bot_token, a.chat_id, a.last_offline_alert
+      FROM   devices d
+      JOIN   alerts  a ON a.device_code = d.device_code
+      WHERE  d.active = TRUE
+        AND  a.active = TRUE
+        AND  a.bot_token IS NOT NULL
+        AND  a.chat_id   IS NOT NULL
+        AND  d.last_seen_at IS NOT NULL
+        AND  d.last_seen_at < NOW() - INTERVAL '1 hour'
+    `);
+
+    const unaHora = 60 * 60 * 1000;
+    const ahora   = new Date();
+
+    for (const row of result.rows) {
+      const ultimaAlerta = row.last_offline_alert ? new Date(row.last_offline_alert) : null;
+      if (ultimaAlerta && (ahora - ultimaAlerta) < unaHora) continue;
+
+      const d    = new Date(row.last_seen_at);
+      const hora = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+      const fecha = d.toLocaleDateString('es-AR');
+      const msg  = `📵 HiWIFI ${row.device_code}\nSin señal hace más de 1 hora.\nÚltima lectura: ${fecha} ${hora}`;
+      enviarTelegram(row.bot_token, row.chat_id, msg);
+      await pool.query(
+        'UPDATE alerts SET last_offline_alert = NOW() WHERE device_code = $1',
+        [row.device_code]
+      );
+    }
+  } catch(e) {
+    console.error('Error verificando offline:', e.message);
+  }
+}
+
+setInterval(verificarOffline, 5 * 60 * 1000); // cada 5 minutos
 
 // ─────────────────────────────────────────────
 //  POST /datos
@@ -95,7 +133,6 @@ app.post('/datos', async (req, res) => {
 
   const { id: device_id, device_code } = dev.rows[0];
 
-  // calcular punto de rocío (fórmula de Magnus)
   const T  = parseFloat(temperature);
   const H  = parseFloat(humidity);
   const a  = 6.112 * Math.exp(17.67 * T / (T + 243.5));
@@ -112,34 +149,25 @@ app.post('/datos', async (req, res) => {
     [device_id]
   );
 
-  // verificar alertas sin bloquear la respuesta
-  verificarAlertas(device_code, parseFloat(temperature), parseFloat(humidity));
+  verificarAlertas(device_code, T, H);
 
   res.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────
-//  GET /api/:codigo  — dashboard cliente
+//  GET /api/:codigo  — dashboard cliente (privado)
 // ─────────────────────────────────────────────
-app.get('/api/:codigo', async (req, res) => {
-  const { codigo } = req.params;
-  const rango = req.query.rango || '24h';
-
+async function getDashboardData(codigo, rango) {
   const intervalMap = { '24h': '24 hours', '7d': '7 days', '30d': '30 days' };
   const interval = intervalMap[rango] || '24 hours';
 
   const dev = await pool.query(
-    `SELECT d.id, d.device_code, d.location, d.last_seen_at
-     FROM   devices d
-     WHERE  d.device_code = $1 AND d.active = TRUE`,
+    `SELECT id, device_code, location, last_seen_at FROM devices WHERE device_code = $1 AND active = TRUE`,
     [codigo]
   );
+  if (dev.rowCount === 0) return null;
 
-  if (dev.rowCount === 0)
-    return res.status(404).json({ error: 'codigo no encontrado' });
-
-  const device = dev.rows[0];
-
+  const device  = dev.rows[0];
   const readings = await pool.query(
     `SELECT temperature, humidity, dew_point, recorded_at
      FROM   readings
@@ -152,23 +180,17 @@ app.get('/api/:codigo', async (req, res) => {
   const rows  = readings.rows;
   const temps = rows.map(r => parseFloat(r.temperature));
   const hums  = rows.map(r => parseFloat(r.humidity));
+  const last  = rows[rows.length - 1] || null;
 
-  const last       = rows[rows.length - 1] || null;
   const minutesAgo = last
     ? Math.round((Date.now() - new Date(last.recorded_at)) / 60000)
     : null;
-  const online = minutesAgo !== null && minutesAgo <= 15;
 
-  const alertRow = await pool.query(
-    'SELECT bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
-    [codigo]
-  );
-  const alertConfig = alertRow.rowCount > 0 ? alertRow.rows[0] : null;
-
-  res.json({
+  return {
     device_code: device.device_code,
     location:    device.location,
-    online,
+    online:      minutesAgo !== null && minutesAgo <= 15,
+    offline:     minutesAgo !== null && minutesAgo > 60,
     minutes_ago: minutesAgo,
     last_seen_at: last ? last.recorded_at : null,
     current: last ? {
@@ -186,13 +208,34 @@ app.get('/api/:codigo', async (req, res) => {
       h:  parseFloat(r.humidity),
       d:  r.dew_point != null ? parseFloat(r.dew_point) : null,
       ts: r.recorded_at
-    })),
-    alert: alertConfig
-  });
+    }))
+  };
+}
+
+app.get('/api/:codigo', async (req, res) => {
+  const data = await getDashboardData(req.params.codigo, req.query.rango || '24h');
+  if (!data) return res.status(404).json({ error: 'codigo no encontrado' });
+
+  const alertRow = await pool.query(
+    'SELECT bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
+    [req.params.codigo]
+  );
+  data.alert = alertRow.rowCount > 0 ? alertRow.rows[0] : null;
+
+  res.json(data);
 });
 
 // ─────────────────────────────────────────────
-//  POST /api/:codigo/alertas  — guardar config alertas
+//  GET /publico/:codigo  — vista pública solo lectura
+// ─────────────────────────────────────────────
+app.get('/publico/:codigo', async (req, res) => {
+  const data = await getDashboardData(req.params.codigo, req.query.rango || '24h');
+  if (!data) return res.status(404).json({ error: 'codigo no encontrado' });
+  res.json(data);  // sin datos de alertas
+});
+
+// ─────────────────────────────────────────────
+//  POST /api/:codigo/alertas
 // ─────────────────────────────────────────────
 app.post('/api/:codigo/alertas', async (req, res) => {
   const { codigo } = req.params;
@@ -236,7 +279,6 @@ app.get('/admin/devices', adminAuth, async (req, res) => {
 
 app.post('/admin/devices', adminAuth, async (req, res) => {
   const { device_code, token, location } = req.body;
-
   if (!device_code || !token)
     return res.status(400).json({ error: 'device_code y token son obligatorios' });
 
@@ -253,14 +295,12 @@ app.post('/admin/devices', adminAuth, async (req, res) => {
      RETURNING id, device_code, token, location, active`,
     [device_code, token, location || null]
   );
-
   res.status(201).json(result.rows[0]);
 });
 
 app.patch('/admin/devices/:id', adminAuth, async (req, res) => {
   const { id } = req.params;
   const { active } = req.body;
-
   if (active == null)
     return res.status(400).json({ error: 'falta campo active' });
 
@@ -268,7 +308,6 @@ app.patch('/admin/devices/:id', adminAuth, async (req, res) => {
     'UPDATE devices SET active = $1 WHERE id = $2 RETURNING id, device_code, active',
     [active, id]
   );
-
   if (result.rowCount === 0)
     return res.status(404).json({ error: 'dispositivo no encontrado' });
 
@@ -278,11 +317,14 @@ app.patch('/admin/devices/:id', adminAuth, async (req, res) => {
 // ─────────────────────────────────────────────
 //  Static
 // ─────────────────────────────────────────────
-app.get('/',      (req, res) => res.sendFile(__dirname + '/public/index.html'));
-app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
+app.get('/',         (req, res) => res.sendFile(__dirname + '/public/index.html'));
+app.get('/admin',    (req, res) => res.sendFile(__dirname + '/public/admin.html'));
+app.get('/p/:codigo',(req, res) => res.sendFile(__dirname + '/public/publico.html'));
 app.use(express.static(__dirname + '/public'));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`HI-WIFI API corriendo en puerto ${PORT}`));
+// SQL para agregar columna last_offline_alert a la tabla alerts:
+// ALTER TABLE alerts ADD COLUMN IF NOT EXISTS last_offline_alert TIMESTAMPTZ;
