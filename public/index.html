@@ -456,7 +456,7 @@ function buildChartTemp(labels, temps) {
     options: { responsive: true, plugins: { legend: { display: false } }, interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: txtColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
-        y: { ticks: { color: '#D85A30', font: { size: 10 }, callback: v => v+'°' }, grid: { color: gridColor } }
+        y: { ticks: { color: '#D85A30', font: { size: 10 }, callback: v => parseFloat(v.toFixed(1))+'°' }, grid: { color: gridColor } }
       }
     }
   });
