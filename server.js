@@ -22,6 +22,13 @@ function adminAuth(req, res, next) {
 app.get('/admin/auth', adminAuth, (req, res) => res.json({ ok: true }));
 
 // ─────────────────────────────────────────────
+//  Generar PIN aleatorio de 4 dígitos
+// ─────────────────────────────────────────────
+function generarPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+// ─────────────────────────────────────────────
 //  Envío Telegram
 // ─────────────────────────────────────────────
 function enviarTelegram(botToken, chatId, mensaje) {
@@ -78,7 +85,6 @@ async function verificarAlertas(device_code, temperature, humidity) {
 // ─────────────────────────────────────────────
 async function verificarOffline() {
   try {
-    // dispositivos activos con alerta configurada y sin señal hace más de 1 hora
     const result = await pool.query(`
       SELECT d.device_code, d.last_seen_at, a.bot_token, a.chat_id, a.last_offline_alert
       FROM   devices d
@@ -113,7 +119,7 @@ async function verificarOffline() {
   }
 }
 
-setInterval(verificarOffline, 5 * 60 * 1000); // cada 5 minutos
+setInterval(verificarOffline, 5 * 60 * 1000);
 
 // ─────────────────────────────────────────────
 //  POST /datos
@@ -150,12 +156,11 @@ app.post('/datos', async (req, res) => {
   );
 
   verificarAlertas(device_code, T, H);
-
   res.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────
-//  GET /api/:codigo  — dashboard cliente (privado)
+//  GET /api/:codigo  — dashboard cliente (requiere PIN)
 // ─────────────────────────────────────────────
 async function getDashboardData(codigo, rango) {
   const intervalMap = { '24h': '24 hours', '7d': '7 days', '30d': '30 days' };
@@ -167,7 +172,7 @@ async function getDashboardData(codigo, rango) {
   );
   if (dev.rowCount === 0) return null;
 
-  const device  = dev.rows[0];
+  const device   = dev.rows[0];
   const readings = await pool.query(
     `SELECT temperature, humidity, dew_point, recorded_at
      FROM   readings
@@ -212,13 +217,32 @@ async function getDashboardData(codigo, rango) {
   };
 }
 
+// Verificar PIN
+async function verificarPin(codigo, pin) {
+  const result = await pool.query(
+    'SELECT pin FROM devices WHERE device_code = $1 AND active = TRUE',
+    [codigo]
+  );
+  if (result.rowCount === 0) return false;
+  const stored = result.rows[0].pin;
+  // Si no tiene PIN configurado, acceso libre (compatibilidad con dispositivos existentes)
+  if (!stored) return true;
+  return stored === String(pin);
+}
+
 app.get('/api/:codigo', async (req, res) => {
-  const data = await getDashboardData(req.params.codigo, req.query.rango || '24h');
+  const { codigo } = req.params;
+  const pin = req.headers['x-pin'] || req.query.pin;
+
+  const pinOk = await verificarPin(codigo, pin);
+  if (!pinOk) return res.status(401).json({ error: 'pin invalido' });
+
+  const data = await getDashboardData(codigo, req.query.rango || '24h');
   if (!data) return res.status(404).json({ error: 'codigo no encontrado' });
 
   const alertRow = await pool.query(
     'SELECT bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active FROM alerts WHERE device_code = $1',
-    [req.params.codigo]
+    [codigo]
   );
   data.alert = alertRow.rowCount > 0 ? alertRow.rows[0] : null;
 
@@ -226,20 +250,23 @@ app.get('/api/:codigo', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-//  GET /publico/:codigo  — vista pública solo lectura
+//  GET /publico/:codigo  — vista pública sin PIN
 // ─────────────────────────────────────────────
 app.get('/publico/:codigo', async (req, res) => {
   const data = await getDashboardData(req.params.codigo, req.query.rango || '24h');
   if (!data) return res.status(404).json({ error: 'codigo no encontrado' });
-  res.json(data);  // sin datos de alertas
+  res.json(data);
 });
 
 // ─────────────────────────────────────────────
-//  PUT /api/:codigo/ubicacion — editar ubicación desde el dashboard
+//  PUT /api/:codigo/ubicacion
 // ─────────────────────────────────────────────
 app.put('/api/:codigo/ubicacion', async (req, res) => {
   const { codigo } = req.params;
-  const { location } = req.body;
+  const { location, pin } = req.body;
+
+  const pinOk = await verificarPin(codigo, pin);
+  if (!pinOk) return res.status(401).json({ error: 'pin invalido' });
 
   const result = await pool.query(
     'UPDATE devices SET location = $1 WHERE device_code = $2 AND active = TRUE RETURNING id',
@@ -256,7 +283,10 @@ app.put('/api/:codigo/ubicacion', async (req, res) => {
 // ─────────────────────────────────────────────
 app.post('/api/:codigo/alertas', async (req, res) => {
   const { codigo } = req.params;
-  const { bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active } = req.body;
+  const { bot_token, chat_id, temp_min, temp_max, hum_min, hum_max, active, pin } = req.body;
+
+  const pinOk = await verificarPin(codigo, pin);
+  if (!pinOk) return res.status(401).json({ error: 'pin invalido' });
 
   const dev = await pool.query(
     'SELECT id FROM devices WHERE device_code = $1 AND active = TRUE',
@@ -289,7 +319,7 @@ app.post('/api/:codigo/alertas', async (req, res) => {
 // ─────────────────────────────────────────────
 app.get('/admin/devices', adminAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, device_code, token, location, active, last_seen_at FROM devices ORDER BY id DESC'
+    'SELECT id, device_code, token, pin, location, active, last_seen_at FROM devices ORDER BY id DESC'
   );
   res.json(result.rows);
 });
@@ -306,11 +336,13 @@ app.post('/admin/devices', adminAuth, async (req, res) => {
   if (exists.rowCount > 0)
     return res.status(409).json({ error: 'device_code o token ya existe' });
 
+  const pin = generarPin();
+
   const result = await pool.query(
-    `INSERT INTO devices (device_code, token, location, active)
-     VALUES ($1, $2, $3, TRUE)
-     RETURNING id, device_code, token, location, active`,
-    [device_code, token, location || null]
+    `INSERT INTO devices (device_code, token, pin, location, active)
+     VALUES ($1, $2, $3, $4, TRUE)
+     RETURNING id, device_code, token, pin, location, active`,
+    [device_code, token, pin, location || null]
   );
   res.status(201).json(result.rows[0]);
 });
@@ -332,6 +364,23 @@ app.patch('/admin/devices/:id', adminAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+//  PATCH /admin/devices/:id/pin — regenerar PIN
+// ─────────────────────────────────────────────
+app.patch('/admin/devices/:id/pin', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const pin = generarPin();
+
+  const result = await pool.query(
+    'UPDATE devices SET pin = $1 WHERE id = $2 RETURNING id, device_code, pin',
+    [pin, id]
+  );
+  if (result.rowCount === 0)
+    return res.status(404).json({ error: 'dispositivo no encontrado' });
+
+  res.json(result.rows[0]);
+});
+
+// ─────────────────────────────────────────────
 //  Static
 // ─────────────────────────────────────────────
 app.get('/',         (req, res) => res.sendFile(__dirname + '/public/index.html'));
@@ -343,5 +392,3 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`HI-WIFI API corriendo en puerto ${PORT}`));
-// SQL para agregar columna last_offline_alert a la tabla alerts:
-// ALTER TABLE alerts ADD COLUMN IF NOT EXISTS last_offline_alert TIMESTAMPTZ;
