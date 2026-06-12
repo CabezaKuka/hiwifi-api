@@ -235,6 +235,23 @@ app.get('/publico/:codigo', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+//  PUT /api/:codigo/ubicacion — editar ubicación desde el dashboard
+// ─────────────────────────────────────────────
+app.put('/api/:codigo/ubicacion', async (req, res) => {
+  const { codigo } = req.params;
+  const { location } = req.body;
+
+  const result = await pool.query(
+    'UPDATE devices SET location = $1 WHERE device_code = $2 AND active = TRUE RETURNING id',
+    [location || null, codigo]
+  );
+  if (result.rowCount === 0)
+    return res.status(404).json({ error: 'dispositivo no encontrado' });
+
+  res.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────
 //  POST /api/:codigo/alertas
 // ─────────────────────────────────────────────
 app.post('/api/:codigo/alertas', async (req, res) => {
