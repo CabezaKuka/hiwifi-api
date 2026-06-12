@@ -259,11 +259,15 @@
     </div>
   </div>
 
-  <div class="gap" style="text-align:center;padding-bottom:20px">
-    <button class="btn-link" onclick="logout()">Salir · cambiar dispositivo</button>
-    <div style="margin-top:10px">
-      <button class="btn-link" onclick="copiarLinkPublico()" id="btn-share">🔗 Copiar link público</button>
-    </div>
+  <div class="gap" style="display:flex;justify-content:space-between;gap:10px;padding-bottom:20px">
+    <button onclick="copiarLinkPublico()" id="btn-share"
+      style="flex:1;padding:10px;font-size:13px;font-weight:500;border:1px solid #e8e8e5;background:#fff;color:#555;border-radius:10px;cursor:pointer">
+      🔗 Link público
+    </button>
+    <button onclick="logout()"
+      style="flex:1;padding:10px;font-size:13px;font-weight:500;border:1px solid #e8e8e5;background:#fff;color:#555;border-radius:10px;cursor:pointer">
+      Salir · cambiar dispositivo
+    </button>
   </div>
 </div>
 
