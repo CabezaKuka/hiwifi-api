@@ -127,12 +127,14 @@
 <!-- LOGIN -->
 <div id="screen-login" class="wrap">
   <div class="card" style="max-width:320px;margin:48px auto">
-    <p style="font-size:13px;color:#888;margin-bottom:18px;line-height:1.5">Ingresá el código de tu equipo para ver tus datos.</p>
+    <p style="font-size:13px;color:#888;margin-bottom:18px;line-height:1.5">Ingresá el código y PIN de tu equipo para ver tus datos.</p>
     <label style="font-size:11px;color:#aaa;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Código de equipo</label>
-    <input id="code-input" type="text" placeholder="Ej: HW-2024-042" autocomplete="off">
-    <div id="error-msg">Código no encontrado. Verificá e intentá de nuevo.</div>
+    <input id="code-input" type="text" placeholder="Ej: HW1" autocomplete="off">
+    <label style="font-size:11px;color:#aaa;display:block;margin-bottom:6px;margin-top:12px;text-transform:uppercase;letter-spacing:.5px">PIN</label>
+    <input id="pin-input" type="number" placeholder="0000" autocomplete="off" maxlength="4" style="letter-spacing:4px;font-size:18px;text-align:center">
+    <div id="error-msg">Código o PIN incorrecto. Verificá e intentá de nuevo.</div>
     <div class="gap"><button class="btn-primary" onclick="login()">Ver mis datos</button></div>
-    <p style="font-size:11px;color:#aaa;text-align:center;margin-top:14px">El código figura en la etiqueta del dispositivo</p>
+    <p style="font-size:11px;color:#aaa;text-align:center;margin-top:14px">El código y PIN figuran en la etiqueta del dispositivo</p>
   </div>
 </div>
 
@@ -274,29 +276,32 @@
 
 <script>
 let chartTemp = null, chartHum = null;
-let currentCode = '', currentRango = '24h', lastReadings = [];
+let currentCode = '', currentPin = '', currentRango = '24h', lastReadings = [];
 let refreshTimer = null, countdownInterval = null, secondsLeft = 300;
 const dark = matchMedia('(prefers-color-scheme:dark)').matches;
 const gridColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
 const txtColor = '#888';
 
-function saveCode(c)    { try { localStorage.setItem('hiwifi_code',c); } catch(e){} }
-function getSavedCode() { try { return localStorage.getItem('hiwifi_code')||''; } catch(e){ return ''; } }
-function clearCode()    { try { localStorage.removeItem('hiwifi_code'); } catch(e){} }
+function saveCode(c, p)  { try { localStorage.setItem('hiwifi_code', c); localStorage.setItem('hiwifi_pin', p); } catch(e){} }
+function getSavedCode()  { try { return localStorage.getItem('hiwifi_code')||''; } catch(e){ return ''; } }
+function getSavedPin()   { try { return localStorage.getItem('hiwifi_pin')||''; } catch(e){ return ''; } }
+function clearCode()     { try { localStorage.removeItem('hiwifi_code'); localStorage.removeItem('hiwifi_pin'); } catch(e){} }
 
 async function login() {
   const code = document.getElementById('code-input').value.trim().toUpperCase();
-  if (!code) return;
+  const pin  = document.getElementById('pin-input').value.trim();
+  if (!code || !pin) return;
   document.getElementById('error-msg').style.display = 'none';
-  await loadData(code, currentRango);
+  await loadData(code, pin, currentRango);
 }
 
 function logout() {
-  clearCode(); currentCode = ''; lastReadings = []; stopRefresh();
+  clearCode(); currentCode = ''; currentPin = ''; lastReadings = []; stopRefresh();
   document.getElementById('screen-dash').style.display  = 'none';
   document.getElementById('screen-login').style.display = 'block';
   document.getElementById('topbar-right').innerHTML = '';
   document.getElementById('code-input').value = '';
+  document.getElementById('pin-input').value  = '';
   if (chartTemp) { chartTemp.destroy(); chartTemp = null; }
   if (chartHum)  { chartHum.destroy();  chartHum  = null; }
 }
@@ -305,16 +310,16 @@ function setRango(rango, btn) {
   currentRango = rango;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  loadData(currentCode, rango);
+  loadData(currentCode, currentPin, rango);
 }
 
-async function loadData(code, rango) {
-  if (!code) return;
+async function loadData(code, pin, rango) {
+  if (!code || !pin) return;
   try {
-    const res = await fetch(`/api/${code}?rango=${rango}`);
+    const res = await fetch(`/api/${code}?rango=${rango}`, { headers: { 'x-pin': pin } });
     if (!res.ok) { document.getElementById('error-msg').style.display = 'block'; return; }
     const data = await res.json();
-    currentCode = code; saveCode(code);
+    currentCode = code; currentPin = pin; saveCode(code, pin);
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-dash').style.display  = 'block';
     document.getElementById('device-name').textContent = data.device_code;
@@ -421,7 +426,7 @@ async function guardarUbicacion() {
     const res = await fetch(`/api/${currentCode}/ubicacion`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: nueva || null })
+      body: JSON.stringify({ location: nueva || null, pin: currentPin })
     });
     if (res.ok) {
       document.getElementById('device-location').textContent = nueva || 'Sin ubicación';
@@ -454,7 +459,8 @@ async function guardarAlertas() {
     temp_max: parseFloat(document.getElementById('alert-temp-max').value) || null,
     hum_min:  parseFloat(document.getElementById('alert-hum-min').value)  || null,
     hum_max:  parseFloat(document.getElementById('alert-hum-max').value)  || null,
-    active:   document.getElementById('alert-active').checked
+    active:   document.getElementById('alert-active').checked,
+    pin:      currentPin
   };
   const msgEl = document.getElementById('alert-msg');
   msgEl.className = 'alert-msg';
@@ -472,7 +478,7 @@ async function guardarAlertas() {
 function startRefresh() {
   stopRefresh(); secondsLeft = 300; updateCountdown();
   countdownInterval = setInterval(() => { secondsLeft--; updateCountdown(); }, 1000);
-  refreshTimer = setInterval(() => loadData(currentCode, currentRango), 300000);
+  refreshTimer = setInterval(() => loadData(currentCode, currentPin, currentRango), 300000);
 }
 function stopRefresh() {
   if (refreshTimer)      { clearInterval(refreshTimer);      refreshTimer = null; }
@@ -543,10 +549,11 @@ async function generarPDF() {
   btn.textContent = '⏳ Generando...';
   btn.disabled = true;
   try {
+    const pinHeader = { headers: { 'x-pin': currentPin } };
     const [r24, r7d, r30d] = await Promise.all([
-      fetch(`/api/${currentCode}?rango=24h`).then(r => r.json()),
-      fetch(`/api/${currentCode}?rango=7d`).then(r => r.json()),
-      fetch(`/api/${currentCode}?rango=30d`).then(r => r.json())
+      fetch(`/api/${currentCode}?rango=24h`, pinHeader).then(r => r.json()),
+      fetch(`/api/${currentCode}?rango=7d`,  pinHeader).then(r => r.json()),
+      fetch(`/api/${currentCode}?rango=30d`, pinHeader).then(r => r.json())
     ]);
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -676,8 +683,9 @@ async function generarPDF() {
   btn.disabled = false;
 }
 
-document.getElementById('code-input').addEventListener('keydown', e => { if (e.key==='Enter') login(); });
-(function(){ const s = getSavedCode(); if (s) loadData(s, currentRango); })();
+document.getElementById('code-input').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('pin-input').focus(); });
+document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key==='Enter') login(); });
+(function(){ const s = getSavedCode(); const p = getSavedPin(); if (s && p) loadData(s, p, currentRango); })();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
