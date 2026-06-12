@@ -13,7 +13,7 @@
   .topbar { background: #fff; border-bottom: 1px solid #e8e8e5; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
   .logo { font-size: 16px; font-weight: 500; } .logo span { color: #1D9E75; }
   .logo small { font-size: 11px; color: #aaa; margin-left: 6px; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
   .card { background: #fff; border: 1px solid #e8e8e5; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
   h2 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
   label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; margin-top: 12px; }
@@ -27,6 +27,7 @@
   .btn-green  { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
   .btn-red    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
   .btn-gray   { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+  .btn-blue   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   .btn-full   { width: 100%; margin-top: 16px; padding: 11px; }
   .msg { font-size: 13px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
   .msg-ok  { background: #d1fae5; color: #065f46; }
@@ -39,9 +40,11 @@
   .badge-on  { background: #d1fae5; color: #065f46; }
   .badge-off { background: #fee2e2; color: #991b1b; }
   .code { font-family: monospace; font-size: 12px; background: #f5f5f3; padding: 2px 6px; border-radius: 4px; }
+  .pin-badge { font-family: monospace; font-size: 14px; font-weight: 700; background: #fef9c3; color: #854d0e; padding: 3px 10px; border-radius: 6px; letter-spacing: 2px; }
   #screen-login { max-width: 340px; margin: 60px auto; }
   #screen-admin { display: none; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   @media (max-width: 500px) { .row { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -72,17 +75,22 @@
     <div class="row">
       <div>
         <label>Código del equipo (device_code)</label>
-        <input type="text" id="new-code" placeholder="HW-2024-043" autocomplete="off">
+        <input type="text" id="new-code" placeholder="HW1" autocomplete="off">
       </div>
       <div>
-        <label>Token</label>
-        <input type="text" id="new-token" placeholder="HW-2024-043" autocomplete="off">
+        <label>Token del firmware</label>
+        <input type="text" id="new-token" placeholder="token-secreto" autocomplete="off">
       </div>
     </div>
     <label>Ubicación (opcional)</label>
     <input type="text" id="new-location" placeholder="Ej: Silo Norte, Campo San Pedro">
     <div class="msg" id="msg-create"></div>
     <button class="btn btn-green btn-full" onclick="crearDispositivo()">Crear dispositivo</button>
+    <div id="nuevo-pin-result" style="display:none;margin-top:14px;padding:14px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:10px">
+      <div style="font-size:12px;color:#065f46;margin-bottom:6px;font-weight:600">✅ Dispositivo creado — datos para la etiqueta:</div>
+      <div style="font-size:13px;color:#1a1a1a">Código: <span id="result-code" class="code"></span></div>
+      <div style="font-size:13px;color:#1a1a1a;margin-top:4px">PIN: <span id="result-pin" class="pin-badge"></span></div>
+    </div>
   </div>
 
   <!-- Lista de dispositivos -->
@@ -101,19 +109,13 @@
 <script>
 let adminKey = '';
 
-// ── Login ────────────────────────────────────────────────────────
 async function doLogin() {
   const key = document.getElementById('input-key').value.trim();
   if (!key) return;
 
-  const res = await fetch('/admin/devices', {
-    headers: { 'x-admin-key': key }
-  });
+  const res = await fetch('/admin/devices', { headers: { 'x-admin-key': key } });
 
-  if (res.status === 401) {
-    showMsg('msg-login', 'Clave incorrecta.', false);
-    return;
-  }
+  if (res.status === 401) { showMsg('msg-login', 'Clave incorrecta.', false); return; }
 
   adminKey = key;
   try { sessionStorage.setItem('hiwifi_admin_key', key); } catch(e) {}
@@ -135,57 +137,60 @@ function logout() {
   document.getElementById('input-key').value = '';
 }
 
-// ── Crear dispositivo ────────────────────────────────────────────
 async function crearDispositivo() {
   const device_code = document.getElementById('new-code').value.trim().toUpperCase();
   const token       = document.getElementById('new-token').value.trim();
   const location    = document.getElementById('new-location').value.trim();
 
-  if (!device_code || !token) {
-    showMsg('msg-create', 'Código y token son obligatorios.', false);
-    return;
-  }
+  if (!device_code || !token) { showMsg('msg-create', 'Código y token son obligatorios.', false); return; }
 
   const res = await fetch('/admin/devices', {
-    method:  'POST',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-    body:    JSON.stringify({ device_code, token, location })
+    body: JSON.stringify({ device_code, token, location })
   });
 
   const data = await res.json();
+  if (!res.ok) { showMsg('msg-create', data.error || 'Error al crear.', false); return; }
 
-  if (!res.ok) {
-    showMsg('msg-create', data.error || 'Error al crear.', false);
-    return;
-  }
+  // Mostrar código y PIN generado
+  document.getElementById('result-code').textContent = data.device_code;
+  document.getElementById('result-pin').textContent  = data.pin;
+  document.getElementById('nuevo-pin-result').style.display = 'block';
 
-  showMsg('msg-create', `Dispositivo ${data.device_code} creado correctamente.`, true);
   document.getElementById('new-code').value     = '';
   document.getElementById('new-token').value    = '';
   document.getElementById('new-location').value = '';
   cargarDispositivos();
 }
 
-// ── Cargar lista ─────────────────────────────────────────────────
 async function cargarDispositivos() {
-  const res = await fetch('/admin/devices', {
-    headers: { 'x-admin-key': adminKey }
-  });
+  const res = await fetch('/admin/devices', { headers: { 'x-admin-key': adminKey } });
   if (!res.ok) return;
   renderTabla(await res.json());
 }
 
-// ── Activar / desactivar ─────────────────────────────────────────
 async function toggleActive(id, currentActive) {
   const res = await fetch(`/admin/devices/${id}`, {
-    method:  'PATCH',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-    body:    JSON.stringify({ active: !currentActive })
+    body: JSON.stringify({ active: !currentActive })
   });
   if (res.ok) cargarDispositivos();
 }
 
-// ── Render tabla ─────────────────────────────────────────────────
+async function regenerarPin(id) {
+  if (!confirm('¿Regenerar PIN? El PIN anterior dejará de funcionar.')) return;
+  const res = await fetch(`/admin/devices/${id}/pin`, {
+    method: 'PATCH',
+    headers: { 'x-admin-key': adminKey }
+  });
+  if (!res.ok) return;
+  const data = await res.json();
+  alert(`Nuevo PIN para ${data.device_code}: ${data.pin}`);
+  cargarDispositivos();
+}
+
 function renderTabla(devices) {
   if (!devices.length) {
     document.getElementById('tabla-wrap').innerHTML =
@@ -194,10 +199,12 @@ function renderTabla(devices) {
   }
 
   let html = `
+    <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
           <th>Código</th>
+          <th>PIN</th>
           <th>Token</th>
           <th>Ubicación</th>
           <th>Última señal</th>
@@ -208,26 +215,33 @@ function renderTabla(devices) {
       <tbody>`;
 
   for (const d of devices) {
-    const ago      = d.last_seen_at ? minutosDesde(d.last_seen_at) : null;
-    const agoText  = ago === null ? '—' : ago === 0 ? 'hace <1 min' : `hace ${ago} min`;
-    const badge    = d.active
+    const ago     = d.last_seen_at ? minutosDesde(d.last_seen_at) : null;
+    const agoText = ago === null ? '—' : ago === 0 ? 'hace <1 min' : `hace ${ago} min`;
+    const badge   = d.active
       ? '<span class="badge badge-on">Activo</span>'
       : '<span class="badge badge-off">Inactivo</span>';
     const btnLabel = d.active ? 'Desactivar' : 'Activar';
     const btnClass = d.active ? 'btn-red' : 'btn-green';
+    const pinText  = d.pin ? `<span class="pin-badge">${d.pin}</span>` : '<span style="color:#aaa;font-size:12px">sin PIN</span>';
 
     html += `
       <tr>
         <td><span class="code">${d.device_code}</span></td>
+        <td>${pinText}</td>
         <td><span class="code">${d.token}</span></td>
         <td style="color:#888">${d.location || '—'}</td>
         <td style="color:#888;font-size:12px">${agoText}</td>
         <td>${badge}</td>
-        <td><button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})">${btnLabel}</button></td>
+        <td>
+          <div class="actions">
+            <button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})">${btnLabel}</button>
+            <button class="btn btn-blue" onclick="regenerarPin(${d.id})">🔑 Nuevo PIN</button>
+          </div>
+        </td>
       </tr>`;
   }
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   document.getElementById('tabla-wrap').innerHTML = html;
 }
 
@@ -237,24 +251,18 @@ function minutosDesde(ts) {
 
 function showMsg(id, text, ok) {
   const el = document.getElementById(id);
-  el.textContent  = text;
-  el.className    = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  el.textContent   = text;
+  el.className     = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
   el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 4000);
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
 }
 
-// ── Al cargar: recuperar sesión ──────────────────────────────────
-document.getElementById('input-key').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin();
-});
+document.getElementById('input-key').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 (function() {
   try {
     const saved = sessionStorage.getItem('hiwifi_admin_key');
-    if (saved) {
-      document.getElementById('input-key').value = saved;
-      doLogin();
-    }
+    if (saved) { document.getElementById('input-key').value = saved; doLogin(); }
   } catch(e) {}
 })();
 </script>
