@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
 <meta name="theme-color" content="#1D9E75">
 <link rel="manifest" href="/manifest.json">
 <title>HiWIFI · Monitor</title>
@@ -95,7 +94,7 @@
   .offline-banner-text { font-size: 14px; font-weight: 600; color: #991b1b; }
   .offline-banner-sub  { font-size: 12px; color: #b91c1c; margin-top: 4px; }
 
-  @media (prefers-color-scheme: dark) and (display-mode: browser) {
+  @media (prefers-color-scheme: dark) {
     body { background: #161616; color: #e0e0d8; }
     .topbar, .card, .metric-card { background: #222; border-color: #2e2e2e; }
     #device-name { color: #e0e0d8; }
@@ -155,7 +154,15 @@
   <div class="gap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div>
       <div id="device-name">--</div>
-      <div id="device-location" style="font-size:12px;color:#888;margin-top:3px;display:none"></div>
+      <div id="device-location-wrap" style="display:none;margin-top:4px;align-items:center;gap:6px">
+        <div id="device-location" style="font-size:12px;color:#888"></div>
+        <button onclick="editarUbicacion()" id="btn-edit-loc" style="font-size:11px;color:#1D9E75;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">✏️ editar</button>
+      </div>
+      <div id="device-location-edit" style="display:none;margin-top:4px;display:none;align-items:center;gap:6px">
+        <input type="text" id="input-ubicacion" style="font-size:12px;padding:4px 8px;width:180px;border-radius:6px;border:1px solid #ddd" placeholder="Ej: Galpón norte">
+        <button onclick="guardarUbicacion()" style="font-size:11px;padding:4px 10px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer">Guardar</button>
+        <button onclick="cancelarUbicacion()" style="font-size:11px;padding:4px 10px;background:#f0f0ee;color:#888;border:1px solid #ddd;border-radius:6px;cursor:pointer">Cancelar</button>
+      </div>
     </div>
     <div id="badge-wrap"></div>
   </div>
@@ -181,9 +188,12 @@
         <span style="color:#ddd">|</span>
         <span style="font-size:14px;color:#888">Estado: <span id="estado-icon" style="font-size:16px">--</span> <span id="estado-texto" style="font-size:16px;font-weight:700">--</span></span>
         <span id="cond-wrap" style="display:none;align-items:center;gap:4px">
-          <span style="color:#ddd">&nbsp;|&nbsp;</span>
-          <span style="font-size:14px;color:#888"> Riesgo condensación: <span id="cond-icon" style="font-size:16px">--</span> <span id="cond-texto" style="font-size:14px;font-weight:700">--</span></span>
+          <span style="color:#ddd">|</span>
+          <span style="font-size:14px;color:#888">Condensación: <span id="cond-icon" style="font-size:16px">--</span> <span id="cond-texto" style="font-size:14px;font-weight:700">--</span></span>
         </span>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#bbb;border-top:1px solid #f0f0ee;padding-top:8px">
+        🌵 Seco &lt;60% &nbsp;·&nbsp; 🟢 Normal 60–80% &nbsp;·&nbsp; 🟡 Húmedo &gt;80% &nbsp;·&nbsp; 🔴 Condensación si Tr ≥ T−2°
       </div>
     </div>
   </div>
@@ -259,15 +269,11 @@
     </div>
   </div>
 
-  <div class="gap" style="display:flex;justify-content:space-between;gap:10px;padding-bottom:20px">
-    <button onclick="copiarLinkPublico()" id="btn-share"
-      style="flex:1;padding:10px;font-size:13px;font-weight:500;border:1px solid #a7f3d0;background:#f0fdf4;color:#065f46;border-radius:10px;cursor:pointer">
-      🔗 Link público
-    </button>
-    <button onclick="logout()"
-      style="flex:1;padding:10px;font-size:13px;font-weight:500;border:1px solid #cbd5e1;background:#f8fafc;color:#475569;border-radius:10px;cursor:pointer">
-      Salir · cambiar dispositivo
-    </button>
+  <div class="gap" style="text-align:center;padding-bottom:20px">
+    <button class="btn-link" onclick="logout()">Salir · cambiar dispositivo</button>
+    <div style="margin-top:10px">
+      <button class="btn-link" onclick="copiarLinkPublico()" id="btn-share">🔗 Copiar link público</button>
+    </div>
   </div>
 </div>
 
@@ -317,9 +323,16 @@ async function loadData(code, rango) {
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-dash').style.display  = 'block';
     document.getElementById('device-name').textContent = data.device_code;
-    const locEl = document.getElementById('device-location');
-    if (data.location) { locEl.textContent = data.location; locEl.style.display = 'inline'; }
-    else               { locEl.style.display = 'none'; }
+    const locWrap = document.getElementById('device-location-wrap');
+    const locEl   = document.getElementById('device-location');
+    if (data.location) {
+      locEl.textContent = data.location;
+      locWrap.style.display = 'flex';
+    } else {
+      locEl.textContent = '';
+      locWrap.style.display = 'flex'; // mostrar igual para poder agregar
+      locEl.textContent = 'Sin ubicación';
+    }
 
     const badgeClass = data.online ? 'badge-ok' : (data.minutes_ago === null ? 'badge-unk' : 'badge-off');
     const badgeText  = data.online ? 'En línea' : (data.minutes_ago === null ? 'Sin datos' : 'Sin señal');
@@ -366,7 +379,7 @@ async function loadData(code, rango) {
         else if (dt > 1) { rIcon = '🟠'; rTexto = 'Alto';      rColor = '#c2410c'; }
         else             { rIcon = '🔴'; rTexto = 'Muy alto';  rColor = '#991b1b'; }
         document.getElementById('cond-icon').textContent  = rIcon;
-        document.getElementById('cond-texto').textContent = rTexto;
+        document.getElementById('cond-texto').textContent = rTexto + ' (ΔT ' + dt.toFixed(1) + '°)';
         document.getElementById('cond-texto').style.color = rColor;
         document.getElementById('cond-wrap').style.display = 'flex';
       } else {
@@ -494,6 +507,35 @@ function buildChartHum(labels, hums) {
       }
     }
   });
+}
+
+function editarUbicacion() {
+  const locEl   = document.getElementById('device-location');
+  const editEl  = document.getElementById('device-location-edit');
+  const inputEl = document.getElementById('input-ubicacion');
+  document.getElementById('device-location-wrap').style.display = 'none';
+  editEl.style.display = 'flex';
+  inputEl.value = locEl.textContent === 'Sin ubicación' ? '' : locEl.textContent;
+  inputEl.focus();
+}
+function cancelarUbicacion() {
+  document.getElementById('device-location-wrap').style.display = 'flex';
+  document.getElementById('device-location-edit').style.display = 'none';
+}
+async function guardarUbicacion() {
+  const nueva = document.getElementById('input-ubicacion').value.trim();
+  try {
+    const res = await fetch(`/api/${currentCode}/ubicacion`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: nueva || null })
+    });
+    if (res.ok) {
+      const locEl = document.getElementById('device-location');
+      locEl.textContent = nueva || 'Sin ubicación';
+      cancelarUbicacion();
+    }
+  } catch(e) { cancelarUbicacion(); }
 }
 
 function copiarLinkPublico() {
