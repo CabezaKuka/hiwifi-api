@@ -184,6 +184,15 @@ async function regenerarPin(id) {
   cargarDispositivos();
 }
 
+async function eliminarDispositivo(id, code) {
+  if (!confirm(`¿Eliminar ${code}? Se borrarán todos sus datos históricos. Esta acción es irreversible.`)) return;
+  const res = await fetch(`/admin/devices/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-key': adminKey }
+  });
+  if (res.ok) cargarDispositivos();
+}
+
 function renderTabla(devices) {
   if (!devices.length) {
     document.getElementById('tabla-wrap').innerHTML =
@@ -229,6 +238,7 @@ function renderTabla(devices) {
           <div class="actions">
             <button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})" title="${btnLabel}" style="padding:6px 10px;font-size:16px">${d.active ? '⏸' : '▶'}</button>
             <button class="btn btn-blue" onclick="regenerarPin(${d.id})" title="Nuevo PIN" style="padding:6px 10px;font-size:16px">🔑</button>
+            <button class="btn btn-red" onclick="eliminarDispositivo(${d.id}, '${d.device_code}')" title="Eliminar" style="padding:6px 10px;font-size:16px">🗑</button>
           </div>
         </td>
       </tr>`;
