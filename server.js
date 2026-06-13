@@ -361,6 +361,21 @@ app.post('/admin/devices', adminAuth, async (req, res) => {
   res.status(201).json(result.rows[0]);
 });
 
+// ─────────────────────────────────────────────
+//  DELETE /admin/devices/:id — borrado físico
+// ─────────────────────────────────────────────
+app.delete('/admin/devices/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const dev = await pool.query('SELECT device_code FROM devices WHERE id = $1', [id]);
+  if (dev.rowCount === 0)
+    return res.status(404).json({ error: 'dispositivo no encontrado' });
+  const device_code = dev.rows[0].device_code;
+  await pool.query('DELETE FROM readings WHERE device_id = $1', [id]);
+  await pool.query('DELETE FROM alerts WHERE device_code = $1', [device_code]);
+  await pool.query('DELETE FROM devices WHERE id = $1', [id]);
+  res.json({ ok: true, device_code });
+});
+
 app.patch('/admin/devices/:id', adminAuth, async (req, res) => {
   const { id } = req.params;
   const { active } = req.body;
