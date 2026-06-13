@@ -72,24 +72,19 @@
   <!-- Nuevo dispositivo -->
   <div class="card">
     <h2>Nuevo dispositivo</h2>
-    <div class="row">
-      <div>
-        <label>Código del equipo (device_code)</label>
-        <input type="text" id="new-code" placeholder="HW1" autocomplete="off">
-      </div>
-      <div>
-        <label>Token del firmware</label>
-        <input type="text" id="new-token" placeholder="token-secreto" autocomplete="off">
-      </div>
+    <div>
+      <label>Código del equipo (device_code)</label>
+      <input type="text" id="new-code" placeholder="Ej: HW1" autocomplete="off">
     </div>
     <label>Ubicación (opcional)</label>
     <input type="text" id="new-location" placeholder="Ej: Silo Norte, Campo San Pedro">
     <div class="msg" id="msg-create"></div>
     <button class="btn btn-green btn-full" onclick="crearDispositivo()">Crear dispositivo</button>
     <div id="nuevo-pin-result" style="display:none;margin-top:14px;padding:14px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:10px">
-      <div style="font-size:12px;color:#065f46;margin-bottom:6px;font-weight:600">✅ Dispositivo creado — datos para la etiqueta:</div>
+      <div style="font-size:12px;color:#065f46;margin-bottom:8px;font-weight:600">✅ Dispositivo creado</div>
       <div style="font-size:13px;color:#1a1a1a">Código: <span id="result-code" class="code"></span></div>
       <div style="font-size:13px;color:#1a1a1a;margin-top:4px">PIN: <span id="result-pin" class="pin-badge"></span></div>
+      <div style="font-size:11px;color:#888;margin-top:8px">Token firmware: <span id="result-token" class="code" style="font-size:11px"></span></div>
     </div>
   </div>
 
@@ -139,27 +134,25 @@ function logout() {
 
 async function crearDispositivo() {
   const device_code = document.getElementById('new-code').value.trim().toUpperCase();
-  const token       = document.getElementById('new-token').value.trim();
   const location    = document.getElementById('new-location').value.trim();
 
-  if (!device_code || !token) { showMsg('msg-create', 'Código y token son obligatorios.', false); return; }
+  if (!device_code) { showMsg('msg-create', 'El código del equipo es obligatorio.', false); return; }
 
   const res = await fetch('/admin/devices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-    body: JSON.stringify({ device_code, token, location })
+    body: JSON.stringify({ device_code, location })
   });
 
   const data = await res.json();
   if (!res.ok) { showMsg('msg-create', data.error || 'Error al crear.', false); return; }
 
-  // Mostrar código y PIN generado
-  document.getElementById('result-code').textContent = data.device_code;
-  document.getElementById('result-pin').textContent  = data.pin;
+  document.getElementById('result-code').textContent  = data.device_code;
+  document.getElementById('result-pin').textContent   = data.pin;
+  document.getElementById('result-token').textContent = data.token;
   document.getElementById('nuevo-pin-result').style.display = 'block';
 
   document.getElementById('new-code').value     = '';
-  document.getElementById('new-token').value    = '';
   document.getElementById('new-location').value = '';
   cargarDispositivos();
 }
@@ -234,8 +227,8 @@ function renderTabla(devices) {
         <td>${badge}</td>
         <td>
           <div class="actions">
-            <button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})">${btnLabel}</button>
-            <button class="btn btn-blue" onclick="regenerarPin(${d.id})">🔑 Nuevo PIN</button>
+            <button class="btn ${btnClass}" onclick="toggleActive(${d.id}, ${d.active})" title="${btnLabel}" style="padding:6px 10px;font-size:16px">${d.active ? '⏸' : '▶'}</button>
+            <button class="btn btn-blue" onclick="regenerarPin(${d.id})" title="Nuevo PIN" style="padding:6px 10px;font-size:16px">🔑</button>
           </div>
         </td>
       </tr>`;
