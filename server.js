@@ -29,6 +29,19 @@ function generarPin() {
 }
 
 // ─────────────────────────────────────────────
+//  Generar token único tok + 6 dígitos
+// ─────────────────────────────────────────────
+async function generarToken() {
+  let token, exists;
+  do {
+    token = 'tok' + String(Math.floor(100000 + Math.random() * 900000));
+    const r = await pool.query('SELECT id FROM devices WHERE token = $1', [token]);
+    exists = r.rowCount > 0;
+  } while (exists);
+  return token;
+}
+
+// ─────────────────────────────────────────────
 //  Envío Telegram
 // ─────────────────────────────────────────────
 function enviarTelegram(botToken, chatId, mensaje) {
@@ -325,18 +338,19 @@ app.get('/admin/devices', adminAuth, async (req, res) => {
 });
 
 app.post('/admin/devices', adminAuth, async (req, res) => {
-  const { device_code, token, location } = req.body;
-  if (!device_code || !token)
-    return res.status(400).json({ error: 'device_code y token son obligatorios' });
+  const { device_code, location } = req.body;
+  if (!device_code)
+    return res.status(400).json({ error: 'device_code es obligatorio' });
 
   const exists = await pool.query(
-    'SELECT id FROM devices WHERE device_code = $1 OR token = $2',
-    [device_code, token]
+    'SELECT id FROM devices WHERE device_code = $1',
+    [device_code]
   );
   if (exists.rowCount > 0)
-    return res.status(409).json({ error: 'device_code o token ya existe' });
+    return res.status(409).json({ error: 'device_code ya existe' });
 
-  const pin = generarPin();
+  const token = await generarToken();
+  const pin   = generarPin();
 
   const result = await pool.query(
     `INSERT INTO devices (device_code, token, pin, location, active)
